@@ -2,7 +2,7 @@ name: Build Explorer
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
     paths:
       - 'build.gradle'
       - 'src/**'
