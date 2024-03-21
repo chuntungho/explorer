@@ -1,4 +1,4 @@
-name: Build kit-go
+name: Build Explorer
 
 on:
   push:
@@ -54,8 +54,8 @@ jobs:
       - name: Upload file to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          port: ${{ secrets.SERVER_PORT }}
+          host: ${{ vars.SERVER_HOST }}
+          port: ${{ vars.SERVER_PORT }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_KEY }}
           # note that source structure will be kept in target folder
@@ -66,8 +66,8 @@ jobs:
       - name: Deploy in remote server
         uses: appleboy/ssh-action@v1.0.2
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          port: ${{ secrets.SERVER_PORT }}
+          host: ${{ vars.SERVER_HOST }}
+          port: ${{ vars.SERVER_PORT }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_KEY }}
           script_stop: true
