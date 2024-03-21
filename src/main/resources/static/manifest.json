@@ -1,0 +1,21 @@
+{
+
+  "name": "Explorer",
+
+  "short_name": "Explorer",
+
+  "start_url": "https://pages.show",
+
+  "display": "standalone",
+
+  "icons": [{
+
+    "src": "app.png",
+
+    "sizes": "128x128`",
+
+    "type": "image/png"
+
+  }]
+
+}

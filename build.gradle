@@ -1,0 +1,59 @@
+// https://plugins.gradle.org/
+// import plugin by plugins DSL
+plugins {
+    id 'idea'
+    id 'java'
+    id 'org.springframework.boot' version '3.2.1'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'org.graalvm.buildtools.native' version '0.9.28'
+}
+
+group = 'com.chuntung.kit.go'
+//version = 'unspecified'
+
+repositories {
+    mavenCentral()
+}
+
+group 'com.chuntung.kit'
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = '17'
+
+[compileJava,compileTestJava,javadoc]*.options*.encoding = 'UTF-8'
+
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.spring.io/release' }
+}
+
+dependencies {
+    implementation('org.springframework.boot:spring-boot-starter-web')
+
+    // jsoup for html handle
+    implementation 'org.jsoup:jsoup:1.17.2'
+
+    // https://mvnrepository.com/artifact/org.brotli/dec
+    implementation 'org.brotli:dec:0.1.2'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+graalvmNative {
+    binaries {
+        main {
+            buildArgs.add('-H:+AddAllCharsets')
+        }
+    }
+}
+
+tasks.named('bootBuildImage') {
+    imageName = 'explorer'
+    builder = 'paketobuildpacks/builder:tiny'
+    pullPolicy = 'IF_NOT_PRESENT'
+    environment = ['BP_NATIVE_IMAGE': 'true', "BP_NATIVE_IMAGE_BUILD_ARGUMENTS": "-H:+AddAllCharsets"]
+}

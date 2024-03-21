@@ -1,0 +1,61 @@
+logging:
+  level:
+    com.chuntung.explorer: debug
+
+explorer:
+  proxy:
+    enabled: false
+    type: SOCKS
+    host: localhost
+    port: 7890
+
+  # for local debug
+  assets-path: src/main/resources/static
+
+  host-mappings:
+    google: www.google.com
+
+  # override built-in rules
+  block-rules:
+    - host-pattern: www\.google\.com
+      block-paths: ["/gen_204"]
+
+    - host-pattern: .*\.?baidu\.com
+      block-paths: [".*\\.gif", "/ztbox"]
+
+    - host-pattern: .*\.?csdnimg\.cn
+      block-paths: [".*/report.js"]
+    - host-pattern: .*\.?csdn\.net
+      block-paths: []
+      block-contents:
+        - selector: "head"
+          append: | # append style
+            <style>
+            .passport-login-container {display: none !important;}
+            #toolbarBox {display: none;}
+            #content_views pre {
+              height: auto !important;
+              max-height: none;
+              -webkit-touch-callout: text;
+              -webkit-user-select: text;
+              -khtml-user-select: text;
+              -moz-user-select: text;
+              -ms-user-select: text; 
+              user-select: text; 
+            }
+            #content_views pre code {
+              -webkit-touch-callout: text;
+              -webkit-user-select: text;
+              -khtml-user-select: text;
+              -moz-user-select: text;
+              -ms-user-select: text; 
+              user-select: text; 
+            }
+            </style>
+        - selector: "img[onerror]"
+          action: REMOVE
+        - selector: "code"
+          attributes:
+            onclick:
+        - selector: ".recommend-box,#recommend-right,#footerRightAds"
+          action: REMOVE

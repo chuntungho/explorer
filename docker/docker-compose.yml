@@ -1,0 +1,17 @@
+version: '3.6'
+
+services:
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - certs:/etc/certs
+      - nginx-explorer.conf:/etc/nginx/conf.d/explorer.conf
+    ports:
+      - 80:80
+      - 443:443
+
+  explorer:
+    image: explorer
+    command: --spring.profiles.active=prod
+    volumes:
+      - application-prod.yml:/workspace/application-prod.yml
