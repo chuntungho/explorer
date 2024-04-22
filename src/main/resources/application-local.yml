@@ -9,6 +9,8 @@ explorer:
     host: localhost
     port: 7890
 
+  wildcard-domain: localhost:2024
+
   # for local debug
   assets-path: src/main/resources/static
 

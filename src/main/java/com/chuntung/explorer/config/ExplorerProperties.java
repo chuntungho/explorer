@@ -12,6 +12,9 @@ public class ExplorerProperties {
     // support proxy
     private ProxyProperties proxy;
 
+    // wildcard domain, use host header if not specified
+    private String wildcardDomain;
+
     private String assetsPath = "static";
 
     /**
@@ -34,7 +37,6 @@ public class ExplorerProperties {
      */
     private Map<String, String> hostMappings;
 
-
     private List<BlockRule> blockRules;
 
     public ProxyProperties getProxy() {
@@ -43,6 +45,14 @@ public class ExplorerProperties {
 
     public void setProxy(ProxyProperties proxy) {
         this.proxy = proxy;
+    }
+
+    public String getWildcardDomain() {
+        return wildcardDomain;
+    }
+
+    public void setWildcardDomain(String wildcardDomain) {
+        this.wildcardDomain = wildcardDomain;
     }
 
     public String getAssetsPath() {

@@ -66,10 +66,14 @@ public class ExplorerController {
             RequestEntity<Resource> request) {
         if (StringUtils.hasLength(url)) {
             try {
+                URI proxyURI = request.getUrl();
+                if (StringUtils.hasLength(explorerProperties.getWildcardDomain())) {
+                    proxyURI = new URI(proxyURI.getScheme() +"://" + explorerProperties.getWildcardDomain());
+                }
                 if (direct) { // direct proxy
-                    return doProxy(request, UrlUtil.toURI(url), request.getUrl());
+                    return doProxy(request, UrlUtil.toURI(url), proxyURI);
                 } else { // just redirect for html
-                    URI proxyUrl = UrlUtil.toURI(UrlUtil.proxyUrl(url, request.getUrl()));
+                    URI proxyUrl = UrlUtil.toURI(UrlUtil.proxyUrl(url, proxyURI));
                     return ResponseEntity.status(HttpStatus.FOUND).location(proxyUrl).build();
                 }
             } catch (Exception e) {
