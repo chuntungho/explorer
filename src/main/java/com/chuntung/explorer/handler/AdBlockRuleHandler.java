@@ -61,7 +61,7 @@ public class AdBlockRuleHandler implements AdBlockHandler {
         return allowed;
     }
 
-    public void postHandle(URI uri, HttpHeaders responseHeaders, Document document) {
+    public void postHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
         blockResponse.stream()
                 .filter(x -> uri.getHost().matches(x.getHostPattern()))
                 .forEach(x -> {
@@ -75,21 +75,21 @@ public class AdBlockRuleHandler implements AdBlockHandler {
                         });
                     }
                     if (x.getBlockContents() != null) {
-                        x.getBlockContents().forEach(y -> blockContent(document, y));
+                        x.getBlockContents().forEach(y -> blockContent(uri, document, y));
                     }
                 });
     }
 
-    private void blockContent(Document document, BlockContent cfg) {
+    private void blockContent(URI uri, Document document, BlockContent cfg) {
         Elements elements = document.select(cfg.getSelector());
         switch (cfg.getAction()) {
             case REMOVE -> elements.remove();
             case HIDE -> elements.attr("style", "display:none");
-            case CUSTOM -> customize(elements, cfg);
+            case CUSTOM -> customize(uri, elements, cfg);
         }
     }
 
-    private void customize(Elements elements, BlockContent cfg) {
+    private void customize(URI uri, Elements elements, BlockContent cfg) {
         if (cfg.getAttributes() != null) {
             cfg.getAttributes().forEach((k, v) -> {
                 if (StringUtils.hasLength(v)) {

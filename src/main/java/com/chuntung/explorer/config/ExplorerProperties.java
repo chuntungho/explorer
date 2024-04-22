@@ -12,8 +12,15 @@ public class ExplorerProperties {
     // support proxy
     private ProxyProperties proxy;
 
-    // wildcard domain, use host header if not specified
-    private String wildcardDomain;
+    // explorer url, use wildcard host if not specified
+    // e.g. http://localhost:2024
+    private String explorerUrl;
+
+    // wildcard host, use host header if not specified
+    // e.g. localhost:2024
+    private String wildcardHost;
+
+    private String interceptorUrl;
 
     private String assetsPath = "static";
 
@@ -47,12 +54,28 @@ public class ExplorerProperties {
         this.proxy = proxy;
     }
 
-    public String getWildcardDomain() {
-        return wildcardDomain;
+    public String getExplorerUrl() {
+        return explorerUrl;
     }
 
-    public void setWildcardDomain(String wildcardDomain) {
-        this.wildcardDomain = wildcardDomain;
+    public void setExplorerUrl(String explorerUrl) {
+        this.explorerUrl = explorerUrl;
+    }
+
+    public String getWildcardHost() {
+        return wildcardHost;
+    }
+
+    public void setWildcardHost(String wildcardHost) {
+        this.wildcardHost = wildcardHost;
+    }
+
+    public String getInterceptorUrl() {
+        return interceptorUrl;
+    }
+
+    public void setInterceptorUrl(String interceptorUrl) {
+        this.interceptorUrl = interceptorUrl;
     }
 
     public String getAssetsPath() {

@@ -33,10 +33,10 @@ public class AdBlocker implements ApplicationContextAware {
         return true;
     }
 
-    public void postHandle(URI remoteURI, HttpHeaders responseHeaders, Document document){
+    public void postHandle(URI proxyURI, URI remoteURI, HttpHeaders responseHeaders, Document document){
         this.adBlockHandlers.forEach(x -> {
             if (x.match(remoteURI)) {
-                x.postHandle(remoteURI, responseHeaders, document);
+                x.postHandle(proxyURI, remoteURI, responseHeaders, document);
             }
         });
     }

@@ -26,8 +26,6 @@ import java.util.zip.GZIPOutputStream;
 @Component
 public class HtmlResolver {
     private static final Logger logger = LoggerFactory.getLogger(HtmlResolver.class);
-    public static final String REMOTE_URL_META = "<meta name=\"remote-url\" content=\"{remoteUrl}\">";
-    public static final String INTERCEPTOR_SCRIPT = "<script src='{proxyHost}/dist/interceptor.js?v1'></script>";
 
     private AdBlocker adBlocker;
 
@@ -50,9 +48,6 @@ public class HtmlResolver {
         if (setting.isRemoveScript()) {
             document.getElementsByTag("script").forEach(Node::remove);
         }
-
-        // intercept dom elements with 'src' attribute
-        interceptDom(document, remoteURI, proxyURI);
 
         // element with url attribute
         Set<String> removeMediaTypes = setting.getRemoveMediaTypes();
@@ -79,7 +74,7 @@ public class HtmlResolver {
                 .forEach(x -> x.attr("action", UrlUtil.proxyUrl(x.attr("action"), proxyURI)));
 
         // post block ads
-        adBlocker.postHandle(remoteURI, responseHeaders, document);
+        adBlocker.postHandle(proxyURI, remoteURI, responseHeaders, document);
 
         byte[] resolved = document.toString().getBytes(charset);
         if (StringUtils.hasLength(encoding)) {
@@ -104,11 +99,6 @@ public class HtmlResolver {
             charset = setting.getCharset();
         }
         return charset;
-    }
-
-    void interceptDom(Document document, URI remoteURI, URI proxyURI) {
-        document.head().append(REMOTE_URL_META.replace("{remoteUrl}", remoteURI.toString()));
-        document.head().prepend(INTERCEPTOR_SCRIPT.replace("{proxyHost}", proxyURI.toString()));
     }
 
     private static byte[] encode(byte[] resolved, String encoding) throws IOException {

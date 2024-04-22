@@ -20,7 +20,7 @@ public interface AdBlockHandler {
         return true;
     }
 
-    void postHandle(URI uri, HttpHeaders responseHeaders, Document document);
+    void postHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document);
 
     default Optional<Element> getElementById(Document document, String id) {
         Element element = document.getElementById(id);

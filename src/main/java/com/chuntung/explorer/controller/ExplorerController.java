@@ -67,8 +67,8 @@ public class ExplorerController {
         if (StringUtils.hasLength(url)) {
             try {
                 URI proxyURI = request.getUrl();
-                if (StringUtils.hasLength(explorerProperties.getWildcardDomain())) {
-                    proxyURI = new URI(proxyURI.getScheme() +"://" + explorerProperties.getWildcardDomain());
+                if (StringUtils.hasLength(explorerProperties.getWildcardHost())) {
+                    proxyURI = new URI(proxyURI.getScheme() +"://" + explorerProperties.getWildcardHost());
                 }
                 if (direct) { // direct proxy
                     return doProxy(request, UrlUtil.toURI(url), proxyURI);

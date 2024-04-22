@@ -1,9 +1,9 @@
 (function () {
   let src = document.currentScript.getAttribute("src");
-  const proxyUrl = src.substring(0, src.indexOf('/', src.indexOf('://') + 3));
-  const proxyHost = proxyUrl.substring(proxyUrl.indexOf('://') + 3);
+  const explorerUrl = document.querySelector('meta[name="explorer-url"]').content;
+  const wildcardHost = document.querySelector('meta[name="wildcard-host"]').content;
 
-  console.log("Proxy URL: " + proxyUrl);
+  console.log("Explorer URL: " + explorerUrl + ", Wildcard host: " + wildcardHost);
 
   const wrapUrl = function (url, direct) {
     if (!url || isWrapped(url) || url.startsWith('data:')) {
@@ -11,14 +11,14 @@
     }
 
     if (url && url.indexOf("//") > -1) {
-      url = proxyUrl + "?" + (direct ? "direct=true&" : "") + "url=" + encodeURIComponent(url);
+      url = explorerUrl + "?" + (direct ? "direct=true&" : "") + "url=" + encodeURIComponent(url);
       console.debug("wrapped: " + url);
     }
     return url;
   };
 
   const isWrapped = function (url) {
-    return url && url.indexOf(proxyHost) > -1;
+    return url && url.indexOf(wildcardHost) > -1;
   };
 
   const getHandler = function (obj, key) {
