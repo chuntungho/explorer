@@ -27,7 +27,7 @@ server:
 
 explorer:
   # the headers passed by reverse proxy
-  proxy-headers: Host,X-Real-IP,X-Forwarded-For,X-Forwarded-Proto
+  proxy-headers: X-Real-IP,X-Forwarded-For,X-Forwarded-Proto
 
   # the headers should not be sent to client
   excluded-headers: X-Frame-Options,Content-Security-Policy,Content-Security-Policy-Report-Only,Transfer-Encoding

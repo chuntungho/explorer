@@ -37,7 +37,7 @@ public class ExplorerProperties {
     /**
      * Url in headers should be transformed to real url.
      */
-    private Set<String> transformHeaders = Set.of("Origin", "Referer");
+    private Set<String> transformHeaders = Set.of("Origin", "Referer", "Host");
 
     /**
      * Note that host mapping may cause cors issue, it only supports for static request.

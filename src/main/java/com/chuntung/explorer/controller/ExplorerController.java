@@ -235,6 +235,10 @@ public class ExplorerController {
         // replace host with remote host
         for (String x : explorerProperties.getTransformHeaders()) {
             if (requestHeaders.containsKey(x)) {
+                if (x.equalsIgnoreCase("Host")) {
+                    requestHeaders.set(x, remoteURI.getHost());
+                    continue;
+                }
                 String url = requestHeaders.getFirst(x);
                 if (url != null && url.contains("//") & url.contains(proxyURI.getHost())) {
                     List<URI> uris = UrlUtil.splitUris(UrlUtil.toURI(url), explorerProperties.getHostMappings());

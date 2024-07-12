@@ -9,7 +9,10 @@ explorer:
     host: localhost
     port: 7890
 
-  wildcard-domain: localhost:2024
+  # change this if the host differs from wildcard host
+  explorer-url:
+  # change this if it differs from the host in explorer url
+  wildcard-host:
 
   # for local debug
   assets-path: src/main/resources/static
@@ -19,6 +22,13 @@ explorer:
 
   # override built-in rules
   block-rules:
+    # it is only allowed to access html in explorer page
+    - host-pattern: .*
+      block-contents:
+        - selector: "head"
+          prepend: | 
+            <script>if(window===window.top){window.location.href='https://explorer.chuntung.com';}</script>
+
     - host-pattern: www\.google\.com
       block-paths: ["/gen_204"]
 
