@@ -14,7 +14,8 @@ import org.springframework.context.annotation.ComponentScan;
 public class MainApplication {
     public static void main(String[] args) {
         new SpringApplicationBuilder()
-                .sources(MainApplication.class).web(WebApplicationType.NONE)
+                // parent web container required for native
+                .sources(MainApplication.class).web(WebApplicationType.SERVLET)
                 .child(IngressApplication.class).web(WebApplicationType.SERVLET)
                 .sibling(ProxyApplication.class).web(WebApplicationType.SERVLET)
                 .run(args);
