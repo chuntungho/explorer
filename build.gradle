@@ -48,6 +48,7 @@ graalvmNative {
     binaries {
         main {
             buildArgs.add('-H:+AddAllCharsets')
+            buildArgs.add('-H:ExcludeResources=".*/application-local.yml$"')
         }
     }
 }
@@ -56,5 +57,5 @@ tasks.named('bootBuildImage') {
     imageName = 'explorer'
     builder = 'paketobuildpacks/builder:tiny'
     pullPolicy = 'IF_NOT_PRESENT'
-    environment = ['BP_NATIVE_IMAGE': 'true', "BP_NATIVE_IMAGE_BUILD_ARGUMENTS": "-H:+AddAllCharsets"]
+    environment = ['BP_NATIVE_IMAGE': 'true', 'BP_NATIVE_IMAGE_BUILD_ARGUMENTS': '-H:+AddAllCharsets -H:ExcludeResources=".*/application-local.yml$"']
 }

@@ -1,4 +1,4 @@
-package com.chuntung.explorer.controller;
+package com.chuntung.explorer.manager;
 
 import java.util.*;
 
@@ -36,7 +36,7 @@ public class ExplorerSetting {
         }
     }
 
-    ExplorerSetting(String query) {
+    public ExplorerSetting(String query) {
         this(parseQueryString(query));
     }
 

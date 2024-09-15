@@ -1,4 +1,4 @@
-package com.chuntung.explorer.controller;
+package com.chuntung.explorer.manager;
 
 import com.chuntung.explorer.util.UrlUtil;
 import org.brotli.dec.BrotliInputStream;

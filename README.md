@@ -4,7 +4,7 @@ Explore the web customized to your wish.
 
 ## Online Demo
 
-[https://explorer.chuntung.com](https://explorer.chuntung.com)
+[https://x.chuntung.com](https://x.chuntung.com)
 
 ## Local Debug
 
@@ -61,7 +61,6 @@ server {
 
         location / {
                 proxy_http_version 1.1;
-                proxy_set_header x-internal-forward "y";
                 proxy_set_header Connection       "";
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
@@ -86,7 +85,7 @@ server {
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                 proxy_set_header X-Forwarded-Proto $scheme;
-                proxy_pass http://explorer:2024;
+                proxy_pass http://explorer:2025;
         }
 }
 ```

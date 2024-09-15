@@ -1,1 +1,6 @@
 # production config
+explorer:
+  # change this if the host differs from wildcard host
+  explorer-url: # http://localhost:2024
+  # change this if it differs from the host in explorer url
+  wildcard-host: # localhost:2025
