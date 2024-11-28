@@ -27,12 +27,23 @@ import java.util.zip.GZIPOutputStream;
 public class HtmlResolver {
     private static final Logger logger = LoggerFactory.getLogger(HtmlResolver.class);
 
-    private AdBlocker adBlocker;
+    private BlockManager adBlocker;
 
-    public HtmlResolver(AdBlocker adBlocker) {
+    public HtmlResolver(BlockManager adBlocker) {
         this.adBlocker = adBlocker;
     }
 
+    /**
+     * Replace url domains in document with proxied-domain.
+     *
+     * @param resource
+     * @param responseHeaders
+     * @param remoteURI
+     * @param proxyURI
+     * @param setting
+     * @return
+     * @throws IOException
+     */
     public ByteArrayResource resolve(Resource resource, HttpHeaders responseHeaders, URI remoteURI, URI proxyURI, ExplorerSetting setting)
             throws IOException {
         String charset = getCharset(responseHeaders, setting);

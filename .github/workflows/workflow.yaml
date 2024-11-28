@@ -20,23 +20,25 @@ jobs:
           java-version: '17' # for the latest JDK 17
           distribution: 'graalvm-community' # New 'distribution' option
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          native-image-job-reports: 'true'
-          components: 'native-image'
+#          native-image-job-reports: 'true'
+#          components: 'native-image'
           cache: 'gradle'
 
       - name: Build image with Gradle
         run: |
-          gradle bootBuildImage
+          # gradlew bootBuildImage
+          # docker tag explorer chuntungho/explorer
+          gradlew bootJar
+          docker build -t chuntungho/explorer .
       
       - name: Login to Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Push image
         run: |
-          docker tag explorer chuntungho/explorer
           docker push chuntungho/explorer
 
   deploy:

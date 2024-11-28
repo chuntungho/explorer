@@ -3,7 +3,6 @@ package com.chuntung.explorer.handler;
 import com.chuntung.explorer.config.BlockContent;
 import com.chuntung.explorer.config.BlockRule;
 import com.chuntung.explorer.config.ExplorerProperties;
-import jakarta.annotation.PostConstruct;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.http.HttpHeaders;
@@ -19,20 +18,20 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Block by defined rules.
+ * Block request or content by defined rules.
  */
 @Component
-public class AdBlockRuleHandler implements AdBlockHandler {
+public class BlockRuleHandler implements BlockHandler {
     private ExplorerProperties explorerProperties;
 
     private List<BlockRule> blockRequest = Collections.emptyList();
     private List<BlockRule> blockResponse = Collections.emptyList();
 
-    public AdBlockRuleHandler(ExplorerProperties explorerProperties) {
+    public BlockRuleHandler(ExplorerProperties explorerProperties) {
         this.explorerProperties = explorerProperties;
+        init();
     }
 
-    @PostConstruct
     void init() {
         blockRequest = explorerProperties.getBlockRules().stream()
                 .filter(x -> Objects.nonNull(x.getBlockPaths()))
@@ -61,7 +60,7 @@ public class AdBlockRuleHandler implements AdBlockHandler {
         return allowed;
     }
 
-    public void postHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
+    public void postHtmlHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
         blockResponse.stream()
                 .filter(x -> uri.getHost().matches(x.getHostPattern()))
                 .forEach(x -> {

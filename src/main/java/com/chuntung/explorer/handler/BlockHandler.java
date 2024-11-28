@@ -1,5 +1,6 @@
 package com.chuntung.explorer.handler;
 
+import com.chuntung.explorer.manager.HtmlResolver;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.http.HttpHeaders;
@@ -8,11 +9,16 @@ import org.springframework.http.RequestEntity;
 import java.net.URI;
 import java.util.Optional;
 
-public interface AdBlockHandler {
+/**
+ * Customized handler that handle request and parsed html when the uri matches.
+ */
+public interface BlockHandler {
     boolean match(URI uri);
 
     /**
-     * @param uri
+     * Pre-handle request before accessing remote resource.
+     *
+     * @param uri real uri
      * @param requestEntity
      * @return false if not to continue
      */
@@ -20,7 +26,17 @@ public interface AdBlockHandler {
         return true;
     }
 
-    void postHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document);
+    /**
+     * Post-handle after html is resolved by {@link HtmlResolver}.
+     *
+     * @param proxyURI
+     * @param uri
+     * @param responseHeaders
+     * @param document
+     */
+    default void postHtmlHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
+
+    }
 
     default Optional<Element> getElementById(Document document, String id) {
         Element element = document.getElementById(id);

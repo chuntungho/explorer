@@ -1,6 +1,6 @@
 package com.chuntung.explorer.manager;
 
-import com.chuntung.explorer.handler.AdBlockHandler;
+import com.chuntung.explorer.handler.BlockHandler;
 import org.jsoup.nodes.Document;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
@@ -13,16 +13,17 @@ import java.net.URI;
 import java.util.Collection;
 
 @Component
-public class AdBlocker implements ApplicationContextAware {
-    private Collection<AdBlockHandler> adBlockHandlers;
+public class BlockManager implements ApplicationContextAware {
+    private Collection<BlockHandler> blockHandlers;
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        this.adBlockHandlers = applicationContext.getBeansOfType(AdBlockHandler.class).values();
+        // todo sort by order
+        this.blockHandlers = applicationContext.getBeansOfType(BlockHandler.class).values();
     }
 
     public boolean preHandle(URI remoteURI, RequestEntity<?> requestCopy) {
-        for (AdBlockHandler x : this.adBlockHandlers) {
+        for (BlockHandler x : this.blockHandlers) {
             if (x.match(remoteURI)) {
                 if (!x.preHandle(remoteURI, requestCopy)) {
                     return false;
@@ -34,9 +35,9 @@ public class AdBlocker implements ApplicationContextAware {
     }
 
     public void postHandle(URI proxyURI, URI remoteURI, HttpHeaders responseHeaders, Document document){
-        this.adBlockHandlers.forEach(x -> {
+        this.blockHandlers.forEach(x -> {
             if (x.match(remoteURI)) {
-                x.postHandle(proxyURI, remoteURI, responseHeaders, document);
+                x.postHtmlHandle(proxyURI, remoteURI, responseHeaders, document);
             }
         });
     }

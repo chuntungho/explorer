@@ -8,8 +8,11 @@ import org.springframework.util.StringUtils;
 
 import java.net.URI;
 
+/**
+ * Inject interceptor script for HTML.
+ */
 @Component
-public class BrowserInterceptor implements AdBlockHandler {
+public class BrowserInterceptor implements BlockHandler {
     public static final String REMOTE_URL_META = "<meta name=\"remote-url\" content=\"{remoteUrl}\">";
     public static final String EXPLORER_URL_META = "<meta name=\"explorer-url\" content=\"{explorerUrl}\">";
     public static final String WILDCARD_HOST_META = "<meta name=\"wildcard-host\" content=\"{wildcardHost}\">";
@@ -27,7 +30,7 @@ public class BrowserInterceptor implements AdBlockHandler {
     }
 
     @Override
-    public void postHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
+    public void postHtmlHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
         String explorerUrl = StringUtils.hasLength(explorerProperties.getExplorerUrl()) ? explorerProperties.getExplorerUrl() : proxyURI.toString();
         // todo wildcard host with port
         String wildcardHost = StringUtils.hasLength(explorerProperties.getWildcardHost()) ? explorerProperties.getWildcardHost() : proxyURI.getHost();

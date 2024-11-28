@@ -11,7 +11,7 @@ services:
       - 443:443
 
   explorer:
-    image: explorer
+    image: chuntungho/explorer
     command: --spring.profiles.active=prod
     volumes:
       - application-prod.yml:/workspace/application-prod.yml

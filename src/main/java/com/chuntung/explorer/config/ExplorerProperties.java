@@ -44,6 +44,8 @@ public class ExplorerProperties {
      */
     private Map<String, String> hostMappings;
 
+    private List<String> domainBlackList;
+
     private List<BlockRule> blockRules;
 
     public ProxyProperties getProxy() {
@@ -116,6 +118,14 @@ public class ExplorerProperties {
 
     public void setHostMappings(Map<String, String> hostMappings) {
         this.hostMappings = hostMappings;
+    }
+
+    public List<String> getDomainBlackList() {
+        return domainBlackList;
+    }
+
+    public void setDomainBlackList(List<String> domainBlackList) {
+        this.domainBlackList = domainBlackList;
     }
 
     public List<BlockRule> getBlockRules() {

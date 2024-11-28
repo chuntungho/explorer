@@ -1,7 +1,6 @@
 package com.chuntung.explorer.manager;
 
 import com.chuntung.explorer.config.ExplorerProperties;
-import com.chuntung.explorer.handler.AdBlockRuleHandler;
 import com.chuntung.explorer.util.UrlUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,11 +22,11 @@ import java.util.Set;
 public class ProxyManager {
     private static final Logger logger = LoggerFactory.getLogger(ProxyManager.class);
     private ExplorerProperties explorerProperties;
-    private AdBlockRuleHandler adBlocker;
+    private BlockManager adBlocker;
     private RestTemplate restTemplate;
     private HtmlResolver htmlResolver;
 
-    public ProxyManager(ExplorerProperties explorerProperties, AdBlockRuleHandler adBlocker, RestTemplate restTemplate, HtmlResolver htmlResolver) {
+    public ProxyManager(ExplorerProperties explorerProperties, BlockManager adBlocker, RestTemplate restTemplate, HtmlResolver htmlResolver) {
         this.explorerProperties = explorerProperties;
         this.adBlocker = adBlocker;
         this.restTemplate = restTemplate;

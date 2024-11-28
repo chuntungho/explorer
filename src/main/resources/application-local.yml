@@ -20,6 +20,10 @@ explorer:
   host-mappings:
     google: www.google.com
 
+  domain-black-list:
+    - citi.com
+    - zksync.io
+
   # override built-in rules
   block-rules:
     # it is only allowed to access html in explorer page

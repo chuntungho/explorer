@@ -35,7 +35,7 @@ public class IngressController {
     /**
      * Proxy given url in the main domain request.
      *
-     * <p>Just redirect to converted url, as the content may contains relative paths which should be retained</p>
+     * <p>Just redirect to converted url, as the content may contain relative paths which should be retained</p>
      *
      * @param url
      * @param request
