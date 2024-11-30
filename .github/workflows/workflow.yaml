@@ -28,7 +28,7 @@ jobs:
         run: |
           # gradlew bootBuildImage
           # docker tag explorer chuntungho/explorer
-          gradlew bootJar
+          gradle bootJar
           docker build -t chuntungho/explorer .
       
       - name: Login to Registry
