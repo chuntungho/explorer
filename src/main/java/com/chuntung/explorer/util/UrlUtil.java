@@ -74,26 +74,26 @@ public final class UrlUtil {
      * {@code https://www-damain-com_8443.localhost:2024/search?w=xxx}
      * </p>
      *
-     * @param path
+     * @param remoteUrl
      * @param proxyURI
      * @return
      */
-    public static String proxyUrl(String path, URI proxyURI) {
-        String url = path;
-        if (path.startsWith("//")) {
-            path = "https:" + path;
+    public static String proxyUrl(String remoteUrl, URI proxyURI) {
+        String url = remoteUrl;
+        if (remoteUrl.startsWith("//")) {
+            remoteUrl = "https:" + remoteUrl;
         }
 
-        if (path.toLowerCase().startsWith("http://") || path.toLowerCase().startsWith("https://")) {
+        if (remoteUrl.toLowerCase().startsWith("http://") || remoteUrl.toLowerCase().startsWith("https://")) {
             //  convert host and prepend to proxy host
-            URI remoteURI = toURI(path);
+            URI remoteURI = toURI(remoteUrl);
             String origHost = remoteURI.getHost();
             // may be redirected by remote server, avoid convert twice
             if (!origHost.endsWith(proxyURI.getHost())) {
                 String destHost = origHost.replace("-", "--")
                         .replace('.', '-') + (remoteURI.getPort() > 0 ? "-" + remoteURI.getPort() : "")
                         + "." + proxyURI.getHost();
-                url = UriComponentsBuilder.fromHttpUrl(path)
+                url = UriComponentsBuilder.fromUriString(remoteUrl)
                         .scheme(proxyURI.getScheme()).host(destHost).port(proxyURI.getPort())
                         .build().toString();
             }
@@ -106,7 +106,7 @@ public final class UrlUtil {
         if (httpUrl.startsWith("//")) {
             httpUrl = "https:" + httpUrl;
         }
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(httpUrl);
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(httpUrl);
         try {
             return builder.build().toUri();
         } catch (Exception e) {

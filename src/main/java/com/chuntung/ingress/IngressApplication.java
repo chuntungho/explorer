@@ -6,7 +6,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 
 @ComponentScan
-@Configuration(proxyBeanMethods = false)
 @EnableAutoConfiguration
 @PropertySource("classpath:ingress.properties")
 public class IngressApplication {
