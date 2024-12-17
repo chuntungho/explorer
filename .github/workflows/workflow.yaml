@@ -26,7 +26,7 @@ jobs:
 
       - name: Build image with Gradle
         run: |
-          # gradlew bootBuildImage
+          # gradle bootBuildImage
           # docker tag explorer chuntungho/explorer
           gradle bootJar
           docker build -t chuntungho/explorer .
