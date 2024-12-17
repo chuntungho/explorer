@@ -113,7 +113,7 @@ public class ProxyManager {
     }
 
     private HttpHeaders trimHeaders(HttpHeaders immutableHeaders, Set<String> ignoredHeaders) {
-        HttpHeaders mutable = HttpHeaders.writableHttpHeaders(immutableHeaders);
+        HttpHeaders mutable = new HttpHeaders(immutableHeaders);
         ignoredHeaders.forEach(mutable::remove);
         return mutable;
     }

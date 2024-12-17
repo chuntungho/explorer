@@ -38,7 +38,7 @@ public class WebConfig {
     // https://github.com/ItamarBenjamin/stream-rest-template
     RestTemplate restTemplate(RestTemplateBuilder restTemplateBuilder, ExplorerProperties explorerProperties) {
         return restTemplateBuilder
-                .setConnectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(Duration.ofSeconds(10))
                 .requestFactory(() -> {
                     NoRedirectSimpleClientHttpRequestFactory factory = new NoRedirectSimpleClientHttpRequestFactory();
                     ProxyProperties proxy = explorerProperties.getProxy();

@@ -52,7 +52,7 @@ public class ProxyController {
      * @return
      */
     @RequestMapping(value = "/**", consumes = MediaType.ALL_VALUE)
-    public ResponseEntity<Resource> proxy(RequestEntity<?> request) {
+    public ResponseEntity<Resource> proxy(RequestEntity<ByteArrayResource> request) {
         List<URI> uris = UrlUtil.splitUris(request.getUrl(), explorerProperties.getHostMappings());
         if (uris.isEmpty()) {
             String errMsg = "Invalid host: " + request.getUrl().getHost();
