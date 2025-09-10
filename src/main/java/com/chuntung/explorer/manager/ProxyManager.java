@@ -34,7 +34,7 @@ public class ProxyManager {
     }
 
     public ResponseEntity<Resource> proxy(RequestEntity<?> request, URI remoteURI, URI proxyURI) {
-        HttpHeaders requestHeaders = trimHeaders(request.getHeaders(), explorerProperties.getProxyHeaders());
+        HttpHeaders requestHeaders = trimHeaders(request.getHeaders(), explorerProperties.getProxyHeaders(), proxyURI);
 
         // replace host with remote host
         for (String x : explorerProperties.getTransformHeaders()) {
@@ -67,7 +67,7 @@ public class ProxyManager {
             ResponseEntity<? extends Resource> responseEntity =
                     restTemplate.exchange(requestCopy, InputStreamResource.class);
             HttpStatusCode statusCode = responseEntity.getStatusCode();
-            HttpHeaders responseHeaders = trimHeaders(responseEntity.getHeaders(), excludedHeaders);
+            HttpHeaders responseHeaders = trimHeaders(responseEntity.getHeaders(), excludedHeaders, proxyURI);
             Resource body = responseEntity.getBody();
 
             // handle redirect, just let browser redirect to converted url as the html may contain relative paths
@@ -89,7 +89,7 @@ public class ProxyManager {
         } catch (RestClientResponseException e) {
             logger.info("{}, invalid request: {}", e.getStatusCode(), remoteURI);
             return new ResponseEntity<>(e.getResponseBodyAs(ByteArrayResource.class)
-                    , trimHeaders(e.getResponseHeaders(), excludedHeaders), e.getStatusCode());
+                    , trimHeaders(e.getResponseHeaders(), excludedHeaders, proxyURI), e.getStatusCode());
         } catch (Exception e) {
             logger.warn("Failed to handle request: {}", remoteURI, e);
             return new ResponseEntity<>(new ByteArrayResource(e.getMessage().getBytes(StandardCharsets.UTF_8)), HttpStatus.BAD_GATEWAY);
@@ -112,9 +112,20 @@ public class ProxyManager {
         return excludedHeaders;
     }
 
-    private HttpHeaders trimHeaders(HttpHeaders immutableHeaders, Set<String> ignoredHeaders) {
+    private HttpHeaders trimHeaders(HttpHeaders immutableHeaders, Set<String> ignoredHeaders, URI proxyUri) {
         HttpHeaders mutable = new HttpHeaders(immutableHeaders);
         ignoredHeaders.forEach(mutable::remove);
+        List<String> auth = mutable.get("www-authenticate");
+        // todo rewrite response url
+        // Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+        if (auth != null) {
+            String bearer = auth.get(0);
+            if (bearer.startsWith("Bearer") && bearer.contains("https://auth.docker.io/token")) {
+                String proxiedUrl = UrlUtil.proxyUrl("https://auth.docker.io/token", proxyUri);
+                String replaced = bearer.replace("https://auth.docker.io/token", proxiedUrl);
+                mutable.set("www-authenticate", replaced);
+            }
+        }
         return mutable;
     }
 }
