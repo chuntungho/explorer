@@ -1,16 +1,23 @@
 package com.chuntung.explorer.util;
 
+import org.springframework.util.DigestUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class UrlUtil {
+    // cache for long host that exceeds 63 chars limit which defined in RFC 1035
+    // https://datatracker.ietf.org/doc/html/rfc1035
+    public static Map<String, String> hostCache = new ConcurrentHashMap<>();
+
     /**
      * Split request url into remote url with query and proxy host only url.
      *
@@ -27,9 +34,7 @@ public final class UrlUtil {
         }
 
         String prefix = concatHost.substring(0, dotIdx);
-        String remoteHost = prefix.replace("--", "~") // decode '--'
-                .replace('-', '.') // replace '-' with '.'
-                .replace('~', '-'); // revert '-'
+        String remoteHost = decodeHost(prefix);
         int port = -1;
         int lastDot = remoteHost.lastIndexOf('.');
         // try parsing port
@@ -65,6 +70,15 @@ public final class UrlUtil {
         return Arrays.asList(remoteURI, proxyHostURI);
     }
 
+    private static String decodeHost(String prefix) {
+        if (prefix.startsWith("md5-") && hostCache.containsKey(prefix)) {
+            prefix = hostCache.get(prefix);
+        }
+        return prefix.replace("--", "~") // decode '--'
+                .replace('-', '.') // replace '-' with '.'
+                .replace('~', '-');
+    }
+
     /**
      * Wrap remote url with proxy host.
      * <p>
@@ -90,9 +104,8 @@ public final class UrlUtil {
             String origHost = remoteURI.getHost();
             // may be redirected by remote server, avoid convert twice
             if (!origHost.endsWith(proxyURI.getHost())) {
-                String destHost = origHost.replace("-", "--")
-                        .replace('.', '-') + (remoteURI.getPort() > 0 ? "-" + remoteURI.getPort() : "")
-                        + "." + proxyURI.getHost();
+                String encodedHost = encodeHost(origHost, remoteURI);
+                String destHost = encodedHost + "." + proxyURI.getHost();
                 url = UriComponentsBuilder.fromUriString(remoteUrl)
                         .scheme(proxyURI.getScheme()).host(destHost).port(proxyURI.getPort())
                         .build().toString();
@@ -100,6 +113,18 @@ public final class UrlUtil {
         }
 
         return url;
+    }
+
+    private static String encodeHost(String origHost, URI remoteURI) {
+        String encoded = origHost.replace("-", "--").replace('.', '-')
+                + (remoteURI.getPort() > 0 ? "-" + remoteURI.getPort() : "");
+        if (encoded.length() > 63) {
+            String md5 = DigestUtils.md5DigestAsHex(encoded.getBytes(StandardCharsets.UTF_8));
+            String md5Host = "md5-" + md5;
+            hostCache.put(md5Host, encoded);
+            return md5Host;
+        }
+        return encoded;
     }
 
     public static URI toURI(String httpUrl) {
