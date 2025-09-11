@@ -1,6 +1,6 @@
 # Explorer
 
-Explore the web customized to your wish.
+Explore the world wide web customized to your wish.
 
 ## Online Demo
 
@@ -15,8 +15,6 @@ Access the URL: [http://localhost:2024](http://localhost:2024)
 ## Deployment in Docker
 
 > This requires wildcard domain certificate and wildcard DNS record.
-
-`gradle bootBuildImage`
 
 docker-compose.yml
 
@@ -34,11 +32,15 @@ services:
       - 443:443
 
   explorer:
-    image: explorer
+    image: chuntungho/explorer
     command: --spring.profiles.active=prod
+    ports:
+      - 2024:2024
+      - 2025:2025
     volumes:
       - application-prod.yml:/workspace/application-prod.yml
 ```
+
 nginx-explorer.conf
 
 ```conf
