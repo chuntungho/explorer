@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class UrlUtil {
     // cache for long host that exceeds 63 chars limit which defined in RFC 1035
-    // https://datatracker.ietf.org/doc/html/rfc1035
+    // https://datatracker.ietf.org/doc/html/rfc1035#section-2.3.4
     public static Map<String, String> hostCache = new ConcurrentHashMap<>();
 
     /**

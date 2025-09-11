@@ -6,15 +6,33 @@ Explore the world wide web customized to your wish.
 
 [https://x.chuntung.com](https://x.chuntung.com)
 
+### Use as a docker mirror
+
+vi `/etc/docker/daemon.json`
+
+```yaml
+{
+   "registry-mirrors": ["https://docker.x.chuntung.com"]
+ }
+```
+
+Login mirror using Docker Hub [Personal access tokens](https://docs.docker.com/security/access-tokens/)
+
+`docker login docker.x.chuntung.com -u <your-account>`
+
 ## Local Debug
 
-`gradle bootRun`
+Start from source code `gradlew bootRun`
+
+or run by docker image `docker run --name explorer -p 2024:2024 -p 2025:2025 chutnungho/explorer`
 
 Access the URL: [http://localhost:2024](http://localhost:2024)
 
-## Deployment in Docker
+## Production Deployment
 
 > This requires wildcard domain certificate and wildcard DNS record.
+> 
+> Replace `<your-domain.com>` with your own domain in nginx config.
 
 docker-compose.yml
 
@@ -38,7 +56,17 @@ services:
       - 2024:2024
       - 2025:2025
     volumes:
-      - application-prod.yml:/workspace/application-prod.yml
+      - application-prod.yml:/app/application-prod.yml
+```
+application-prod.yml
+
+```yaml
+# production config
+explorer:
+  # change this if the host differs from wildcard host
+  explorer-url: <your-domain.com>
+  # change this if it differs from the host in explorer url
+  wildcard-host: <your-domain.com>
 ```
 
 nginx-explorer.conf
@@ -56,7 +84,7 @@ proxy_busy_buffers_size   256k;
 # explorer server
 server {
         listen 443 ssl;
-        server_name your-domain.com;
+        server_name <your-domain.com>;
 
         ssl_certificate /etc/certs/your-domain/fullchain.cer;
         ssl_certificate_key /etc/certs/your-domain/private.key;
@@ -75,7 +103,7 @@ server {
 # proxy server
 server {
         listen 443 ssl;
-        server_name *.your-domain.com;
+        server_name *.<your-domain.com>;
 
         ssl_certificate /etc/certs/your-domain/fullchain.cer;
         ssl_certificate_key /etc/certs/your-domain/private.key;

@@ -18,7 +18,7 @@ explorer:
   assets-path: src/main/resources/static
 
   host-mappings:
-    google: www.google.com
+    github: github.com
     docker: registry-1.docker.io
 
   domain-black-list:
