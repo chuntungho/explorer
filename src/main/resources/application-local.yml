@@ -19,6 +19,7 @@ explorer:
 
   host-mappings:
     google: www.google.com
+    docker: registry-1.docker.io
 
   domain-black-list:
     - citi.com
