@@ -24,7 +24,7 @@ Login mirror using Docker Hub [Personal access tokens](https://docs.docker.com/s
 
 Start from source code `gradlew bootRun`
 
-or run by docker image `docker run --name explorer -p 2024:2024 -p 2025:2025 chutnungho/explorer`
+or run by docker image `docker run --name explorer -p 2024:2024 -p 2025:2025 chuntungho/explorer`
 
 Access the URL: [http://localhost:2024](http://localhost:2024)
 
