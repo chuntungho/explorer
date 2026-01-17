@@ -11,7 +11,8 @@
 .mtj.tmp/
 
 # idea
-.idea/
+.idea/**
+!.idea/icon.svg
 .gradle/
 build/
 
