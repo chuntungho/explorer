@@ -3,9 +3,15 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'org.springframework.boot' version '3.4.1'
+    id 'org.springframework.boot' version '4.0.2'
     id 'io.spring.dependency-management' version '1.1.7'
-    id 'org.graalvm.buildtools.native' version '0.10.2'
+    id 'org.graalvm.buildtools.native' version '0.10.6'
+    id("org.openrewrite.rewrite") version("latest.release")
+}
+
+rewrite {
+    activeRecipe("org.openrewrite.java.spring.boot4.UpgradeSpringBoot_4_0")
+    setExportDatatables(true)
 }
 
 group = 'com.chuntung.explorer'
@@ -17,22 +23,28 @@ repositories {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
 [compileJava,compileTestJava,javadoc]*.options*.encoding = 'UTF-8'
 
 dependencies {
-    implementation('org.springframework.boot:spring-boot-starter-web')
+    implementation('org.springframework.boot:spring-boot-starter-webmvc')
 
     // jsoup for handling html
-    implementation 'org.jsoup:jsoup:1.18.3'
+    implementation "org.springframework.boot:spring-boot-starter-webmvc-test"
+
+    // jsoup for handling html
+    implementation 'org.jsoup:jsoup:1.22.1'
 
     // https://mvnrepository.com/artifact/org.brotli/dec
+    implementation "org.springframework.boot:spring-boot-starter-restclient"
     implementation 'org.brotli:dec:0.1.2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    rewrite("org.openrewrite.recipe:rewrite-spring:6.23.0")
 }
 
 test {

@@ -38,7 +38,7 @@ public class ProxyManager {
 
         // replace host with remote host
         for (String x : explorerProperties.getTransformHeaders()) {
-            if (requestHeaders.containsKey(x)) {
+            if (requestHeaders.containsHeader(x)) {
                 if (x.equalsIgnoreCase("Host")) {
                     requestHeaders.set(x, remoteURI.getHost());
                     continue;

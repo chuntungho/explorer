@@ -17,7 +17,7 @@ jobs:
       # https://github.com/marketplace/actions/github-action-for-graalvm
       - uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17' # for the latest JDK 17
+          java-version: '21'
           distribution: 'graalvm-community' # New 'distribution' option
           github-token: ${{ secrets.GITHUB_TOKEN }}
 #          native-image-job-reports: 'true'

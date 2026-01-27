@@ -1,7 +1,7 @@
 # https://hub.docker.com/_/amazoncorretto
 # https://docs.spring.io/spring-boot/reference/packaging/container-images/dockerfiles.html
 # Perform the extraction in a separate builder container
-FROM amazoncorretto:17-alpine-jdk AS builder
+FROM amazoncorretto:21-alpine-jdk AS builder
 WORKDIR /builder
 # This points to the built jar file in the target folder
 # Adjust this to 'target/*.jar' if you're using Maven
@@ -12,7 +12,7 @@ COPY ${JAR_FILE} application.jar
 RUN java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 
 # This is the runtime container
-FROM amazoncorretto:17-alpine-jdk
+FROM amazoncorretto:21-alpine-jdk
 WORKDIR /app
 # Copy the extracted jar contents from the builder container into the working directory in the runtime container
 # Every copy step creates a new docker layer
