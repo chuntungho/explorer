@@ -1,6 +1,7 @@
 name: Build Explorer
 
 on:
+  workflow_dispatch: #  manual
   push:
     branches: [ main ]
     paths:
