@@ -1,6 +1,7 @@
 # production config
 explorer:
   # change this if the host differs from wildcard host
-  explorer-url: <your-domain.com>
+  host: <your-domain.com>
+  url: https://<your-domain.com>
   # change this if it differs from the host in explorer url
-  wildcard-host: <your-domain.com>
+  wildcard-host: <wildcard-domain.com>

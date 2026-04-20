@@ -1,4 +1,4 @@
-package com.chuntung.proxy;
+package com.chuntung.explorer.controller;
 
 import com.chuntung.explorer.config.ExplorerProperties;
 import com.chuntung.explorer.manager.AssetManager;

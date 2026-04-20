@@ -31,7 +31,7 @@ public class BrowserInterceptor implements BlockHandler {
 
     @Override
     public void postHtmlHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
-        String explorerUrl = StringUtils.hasLength(explorerProperties.getExplorerUrl()) ? explorerProperties.getExplorerUrl() : proxyURI.toString();
+        String explorerUrl = StringUtils.hasLength(explorerProperties.getUrl()) ? explorerProperties.getUrl() : proxyURI.toString();
         // todo wildcard host with port
         String wildcardHost = StringUtils.hasLength(explorerProperties.getWildcardHost()) ? explorerProperties.getWildcardHost() : proxyURI.getHost();
         String interceptorUrl = StringUtils.hasLength(explorerProperties.getInterceptorUrl()) ? explorerProperties.getInterceptorUrl() : (explorerUrl + "/interceptor.js");

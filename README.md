@@ -24,9 +24,9 @@ Login mirror using Docker Hub [Personal access tokens](https://docs.docker.com/s
 
 Start from source code `gradlew bootRun`
 
-or run by docker image `docker run --name explorer -p 2024:2024 -p 2025:2025 chuntungho/explorer`
+or run by docker image `docker run --name explorer -p 8080:8080 chuntungho/explorer`
 
-Access the URL: [http://localhost:2024](http://localhost:2024)
+Access the URL: [http://localhost:8080](http://localhost:8080)
 
 ## Production Deployment
 
@@ -53,8 +53,7 @@ services:
     image: chuntungho/explorer
     command: --spring.profiles.active=prod
     ports:
-      - 2024:2024
-      - 2025:2025
+      - 8080:8080
     volumes:
       - application-prod.yml:/app/application-prod.yml
 ```
@@ -64,9 +63,10 @@ application-prod.yml
 # production config
 explorer:
   # change this if the host differs from wildcard host
-  explorer-url: <your-domain.com>
+  host: <your-domain.com>
+  url: https://<your-domain.com>
   # change this if it differs from the host in explorer url
-  wildcard-host: <your-domain.com>
+  wildcard-host: <wildcard-domain.com>
 ```
 
 nginx-explorer.conf

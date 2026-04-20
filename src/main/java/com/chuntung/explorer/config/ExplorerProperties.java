@@ -13,11 +13,11 @@ public class ExplorerProperties {
     private ProxyProperties proxy;
 
     // explorer url, use wildcard host if not specified
-    // e.g. http://localhost:2024
-    private String explorerUrl;
+    // e.g. http://localhost:8080
+    private String url;
+    private String host;
 
     // wildcard host, use host header if not specified
-    // e.g. localhost:2024
     private String wildcardHost;
 
     private String interceptorUrl;
@@ -56,12 +56,12 @@ public class ExplorerProperties {
         this.proxy = proxy;
     }
 
-    public String getExplorerUrl() {
-        return explorerUrl;
+    public String getUrl() {
+        return url;
     }
 
-    public void setExplorerUrl(String explorerUrl) {
-        this.explorerUrl = explorerUrl;
+    public void setUrl(String url) {
+        this.url = url;
     }
 
     public String getWildcardHost() {
@@ -70,6 +70,14 @@ public class ExplorerProperties {
 
     public void setWildcardHost(String wildcardHost) {
         this.wildcardHost = wildcardHost;
+    }
+
+    public String getHost() {
+        return host;
+    }
+
+    public void setHost(String host) {
+        this.host = host;
     }
 
     public String getInterceptorUrl() {
