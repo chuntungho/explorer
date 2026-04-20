@@ -45,8 +45,8 @@ jobs:
       - name: Build image with Gradle
         run: |
           gradle bootBuildImage
-          docker tag explorer ${{ IMAGE_NAME }}:sha-${{ github.sha }}
-          docker push ${{ IMAGE_NAME }}:sha-${{ github.sha }}
+          docker tag explorer ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           docker tag explorer ${{ env.IMAGE_NAME }}:latest
           docker push ${{ env.IMAGE_NAME }}:latest
           
