@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import reactor.core.publisher.Mono;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -42,62 +43,62 @@ public class HtmlResolver {
      * @param proxyURI
      * @param setting
      * @return
-     * @throws IOException
      */
-    public ByteArrayResource resolve(Resource resource, HttpHeaders responseHeaders, URI remoteURI, URI proxyURI, ExplorerSetting setting)
-            throws IOException {
-        String charset = getCharset(responseHeaders, setting);
-        String encoding = responseHeaders.getFirst("Content-Encoding");
-        InputStream in = resource.getInputStream();
-        if (StringUtils.hasLength(encoding)) {
-            in = decode(in, encoding);
-        }
+    public Mono<Resource> resolve(Resource resource, HttpHeaders responseHeaders, URI remoteURI, URI proxyURI, ExplorerSetting setting) {
+        return Mono.fromCallable(() -> {
+            String charset = getCharset(responseHeaders, setting);
+            String encoding = responseHeaders.getFirst("Content-Encoding");
+            InputStream in = resource.getInputStream();
+            if (StringUtils.hasLength(encoding)) {
+                in = decode(in, encoding);
+            }
 
-        Document document = Jsoup.parse(in, charset, "");
+            Document document = Jsoup.parse(in, charset, "");
 
-        // remove script
-        if (setting.isRemoveScript()) {
-            document.getElementsByTag("script").forEach(Node::remove);
-        }
+            // remove script
+            if (setting.isRemoveScript()) {
+                document.getElementsByTag("script").forEach(Node::remove);
+            }
 
-        // element with url attribute
-        Set<String> removeMediaTypes = setting.getRemoveMediaTypes();
-        for (String attr : new String[]{"src", "data-src", "href", "data-href"}) {
-            document.getElementsByAttribute(attr).forEach(e -> {
-                String src = e.attr(attr);
-                //  remove blocked media
-                String ext = src.substring(src.lastIndexOf('.') + 1);
-                if (removeMediaTypes.contains(ext)) {
-                    e.remove();
-                    return;
-                }
-                try {
-                    e.attr(attr, UrlUtil.proxyUrl(src, proxyURI));
-                } catch (IllegalStateException exception) {
-                    logger.warn("Invalid src: {}", src);
-                    // NOOP
-                }
-            });
-        }
+            // element with url attribute
+            Set<String> removeMediaTypes = setting.getRemoveMediaTypes();
+            for (String attr : new String[]{"src", "data-src", "href", "data-href"}) {
+                document.getElementsByAttribute(attr).forEach(e -> {
+                    String src = e.attr(attr);
+                    //  remove blocked media
+                    String ext = src.substring(src.lastIndexOf('.') + 1);
+                    if (removeMediaTypes.contains(ext)) {
+                        e.remove();
+                        return;
+                    }
+                    try {
+                        e.attr(attr, UrlUtil.proxyUrl(src, proxyURI));
+                    } catch (IllegalStateException exception) {
+                        logger.warn("Invalid src: {}", src);
+                        // NOOP
+                    }
+                });
+            }
 
-        // form action
-        document.getElementsByTag("form")
-                .forEach(x -> x.attr("action", UrlUtil.proxyUrl(x.attr("action"), proxyURI)));
+            // form action
+            document.getElementsByTag("form")
+                    .forEach(x -> x.attr("action", UrlUtil.proxyUrl(x.attr("action"), proxyURI)));
 
-        // post block ads
-        adBlocker.postHandle(proxyURI, remoteURI, responseHeaders, document);
+            // post block ads
+            adBlocker.postHandle(proxyURI, remoteURI, responseHeaders, document);
 
-        byte[] resolved = document.toString().getBytes(charset);
-        if (StringUtils.hasLength(encoding)) {
-            resolved = encode(resolved, encoding);
-            // overwrite to gzip
-            responseHeaders.set("Content-Encoding", "gzip");
-        }
+            byte[] resolved = document.toString().getBytes(charset);
+            if (StringUtils.hasLength(encoding)) {
+                resolved = encode(resolved, encoding);
+                // overwrite to gzip
+                responseHeaders.set("Content-Encoding", "gzip");
+            }
 
-        // content changed, overwrite content length by spring mvc
-        responseHeaders.remove("Content-Length");
+            // content changed, overwrite content length by spring mvc
+            responseHeaders.remove("Content-Length");
 
-        return new ByteArrayResource(resolved);
+            return new ByteArrayResource(resolved);
+        });
     }
 
     private static String getCharset(HttpHeaders responseHeaders, ExplorerSetting setting) {

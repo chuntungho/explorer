@@ -41,7 +41,7 @@ export default function IframePane({ tab, isActive, iframeRef }: IframePaneProps
     >
       <iframe
         ref={setIframeRef}
-        src={tab.url}
+        src={!tab.url ? undefined : tab.url}
         sandbox="allow-scripts allow-same-origin allow-downloads allow-forms"
         style={{
           position: 'absolute',

@@ -18,9 +18,9 @@ export function buildProxyUrl(url: string): string {
 
   // Protocol-less input: prepend https:// then proxy
   if (!url.includes('//')) {
-    return '?url=' + encodeURIComponent('https://' + url)
+    return '/fetch?url=' + encodeURIComponent('https://' + url)
   }
 
-  // External URL: wrap with ?url=
-  return '?url=' + encodeURIComponent(url)
+  // External URL: wrap with /fetch?url=
+  return '/fetch?url=' + encodeURIComponent(url)
 }

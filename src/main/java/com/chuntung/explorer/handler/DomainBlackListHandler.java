@@ -1,7 +1,7 @@
 package com.chuntung.explorer.handler;
 
 import com.chuntung.explorer.config.ExplorerProperties;
-import org.springframework.http.RequestEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -32,7 +32,7 @@ public class DomainBlackListHandler implements BlockHandler {
         return false;
     }
 
-    public boolean preHandle(URI uri, RequestEntity<?> requestEntity) {
+    public boolean preHandle(URI uri, HttpHeaders httpHeaders) {
         return false;
     }
 }

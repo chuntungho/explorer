@@ -3,9 +3,9 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'org.springframework.boot' version '4.0.2'
+    id 'org.springframework.boot' version '4.0.5'
     id 'io.spring.dependency-management' version '1.1.7'
-    id 'org.graalvm.buildtools.native' version '0.10.6'
+    id 'org.graalvm.buildtools.native' version '0.11.5'
     id("org.openrewrite.rewrite") version("latest.release")
 }
 
@@ -30,7 +30,9 @@ java {
 [compileJava,compileTestJava,javadoc]*.options*.encoding = 'UTF-8'
 
 dependencies {
+    // todo rewrite using webflux
     implementation('org.springframework.boot:spring-boot-starter-webmvc')
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
     // jsoup for handling html
     implementation "org.springframework.boot:spring-boot-starter-webmvc-test"

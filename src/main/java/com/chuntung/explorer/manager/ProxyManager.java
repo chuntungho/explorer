@@ -4,37 +4,41 @@ import com.chuntung.explorer.config.ExplorerProperties;
 import com.chuntung.explorer.util.UrlUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
-import org.springframework.http.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientResponseException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.BodyExtractors;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.server.ServerRequest;
+import org.springframework.web.reactive.function.server.ServerResponse;
+import reactor.core.publisher.Mono;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Component
 public class ProxyManager {
     private static final Logger logger = LoggerFactory.getLogger(ProxyManager.class);
-    private ExplorerProperties explorerProperties;
-    private BlockManager adBlocker;
-    private RestTemplate restTemplate;
-    private HtmlResolver htmlResolver;
+    private final ExplorerProperties explorerProperties;
+    private final BlockManager adBlocker;
+    private final WebClient webClient;
+    private final HtmlResolver htmlResolver;
 
-    public ProxyManager(ExplorerProperties explorerProperties, BlockManager adBlocker, RestTemplate restTemplate, HtmlResolver htmlResolver) {
+    public ProxyManager(ExplorerProperties explorerProperties, BlockManager adBlocker, WebClient webClient, HtmlResolver htmlResolver) {
         this.explorerProperties = explorerProperties;
         this.adBlocker = adBlocker;
-        this.restTemplate = restTemplate;
+        this.webClient = webClient;
         this.htmlResolver = htmlResolver;
     }
 
-    public ResponseEntity<Resource> proxy(RequestEntity<?> request, URI remoteURI, URI proxyURI) {
-        HttpHeaders requestHeaders = trimHeaders(request.getHeaders(), explorerProperties.getProxyHeaders(), proxyURI);
+    public Mono<ServerResponse> proxy(ServerRequest request, URI remoteURI, URI proxyURI) {
+        HttpHeaders requestHeaders = trimHeaders(request.headers().asHttpHeaders(), explorerProperties.getProxyHeaders(), proxyURI);
 
         // replace host with remote host
         for (String x : explorerProperties.getTransformHeaders()) {
@@ -47,53 +51,54 @@ public class ProxyManager {
                 if (url != null && url.contains("//") & url.contains(proxyURI.getHost())) {
                     List<URI> uris = UrlUtil.splitUris(UrlUtil.toURI(url), explorerProperties.getHostMappings());
                     if (!uris.isEmpty()) {
-                        requestHeaders.set(x, uris.get(0).toString());
+                        requestHeaders.set(x, uris.getFirst().toString());
                     }
                 }
             }
         }
 
-        RequestEntity<?> requestCopy = new RequestEntity<>(
-                request.getBody(), requestHeaders, request.getMethod(), remoteURI, request.getType());
-
         // preHandle block ads
-        if (!adBlocker.preHandle(remoteURI, requestCopy)) {
+        if (!adBlocker.preHandle(remoteURI, request.headers().asHttpHeaders())) {
             logger.debug("Blocked request: {}", remoteURI);
-            return ResponseEntity.noContent().build();
+            return ServerResponse.noContent().build();
         }
 
         Set<String> excludedHeaders = getExcludedHeaders(requestHeaders.getOrigin() != null);
-        try {
-            ResponseEntity<? extends Resource> responseEntity =
-                    restTemplate.exchange(requestCopy, InputStreamResource.class);
-            HttpStatusCode statusCode = responseEntity.getStatusCode();
-            HttpHeaders responseHeaders = trimHeaders(responseEntity.getHeaders(), excludedHeaders, proxyURI);
-            Resource body = responseEntity.getBody();
+        return webClient.method(request.method())
+                .uri(remoteURI)
+                .headers(httpHeaders -> httpHeaders.addAll(requestHeaders))
+                .body(BodyInserters.fromPublisher(request.body(BodyExtractors.toDataBuffers()),
+                        org.springframework.core.io.buffer.DataBuffer.class))
+                .exchangeToMono(clientResponse -> {
+                    // handle redirect, just let browser redirect to converted url as the html may contain relative paths
+                    if (clientResponse.statusCode().is3xxRedirection() && clientResponse.headers().asHttpHeaders().getLocation() != null) {
+                        String destUrl = UrlUtil.proxyUrl(Objects.requireNonNull(clientResponse.headers().asHttpHeaders().getLocation()).toString(), proxyURI);
+                        return ServerResponse.status(clientResponse.statusCode())
+                                .headers(httpHeaders -> httpHeaders.addAll(trimHeaders(clientResponse.headers().asHttpHeaders(), excludedHeaders, proxyURI)))
+                                .header("Location", destUrl)
+                                .build();
+                    }
 
-            // handle redirect, just let browser redirect to converted url as the html may contain relative paths
-            if (statusCode.is3xxRedirection() && responseHeaders.getLocation() != null) {
-                String destUrl = UrlUtil.proxyUrl(responseHeaders.getLocation().toString(), proxyURI);
-                responseHeaders.set("Location", destUrl);
-                return new ResponseEntity<>(body, responseHeaders, statusCode);
-            }
-
-            // resolve html
-            MediaType contentType = responseHeaders.getContentType();
-            if (contentType != null && contentType.isCompatibleWith(MediaType.TEXT_HTML) && body != null) {
-                ExplorerSetting setting = new ExplorerSetting(request.getUrl().getRawQuery());
-                Resource resolved = htmlResolver.resolve(body, responseHeaders, remoteURI, proxyURI, setting);
-                return new ResponseEntity<>(resolved, responseHeaders, statusCode);
-            } else {
-                return new ResponseEntity<>(body, responseHeaders, statusCode);
-            }
-        } catch (RestClientResponseException e) {
-            logger.info("{}, invalid request: {}", e.getStatusCode(), remoteURI);
-            return new ResponseEntity<>(e.getResponseBodyAs(ByteArrayResource.class)
-                    , trimHeaders(e.getResponseHeaders(), excludedHeaders, proxyURI), e.getStatusCode());
-        } catch (Exception e) {
-            logger.warn("Failed to handle request: {}", remoteURI, e);
-            return new ResponseEntity<>(new ByteArrayResource(e.getMessage().getBytes(StandardCharsets.UTF_8)), HttpStatus.BAD_GATEWAY);
-        }
+                    // resolve html
+                    MediaType contentType = clientResponse.headers().contentType().orElse(MediaType.APPLICATION_OCTET_STREAM);
+                    if (contentType.isCompatibleWith(MediaType.TEXT_HTML)) {
+                        ExplorerSetting setting = new ExplorerSetting(request.uri().getRawQuery());
+                        return clientResponse.bodyToMono(Resource.class)
+                                .flatMap(resource -> htmlResolver.resolve(resource, clientResponse.headers().asHttpHeaders(), remoteURI, proxyURI, setting))
+                                .flatMap(resolvedResource -> ServerResponse.status(clientResponse.statusCode())
+                                        .headers(httpHeaders -> httpHeaders.addAll(trimHeaders(clientResponse.headers().asHttpHeaders(), excludedHeaders, proxyURI)))
+                                        .bodyValue(resolvedResource));
+                    } else {
+                        return ServerResponse.status(clientResponse.statusCode())
+                                .headers(httpHeaders -> httpHeaders.addAll(trimHeaders(clientResponse.headers().asHttpHeaders(), excludedHeaders, proxyURI)))
+                                .body(BodyInserters.fromPublisher(clientResponse.body(BodyExtractors.toDataBuffers()),
+                                        org.springframework.core.io.buffer.DataBuffer.class));
+                    }
+                })
+                .onErrorResume(e -> {
+                    logger.warn("Failed to handle request: {}", remoteURI, e);
+                    return ServerResponse.status(HttpStatus.BAD_GATEWAY).bodyValue(e.getMessage());
+                });
     }
 
     private Set<String> getExcludedHeaders(Boolean cors) {
@@ -113,13 +118,18 @@ public class ProxyManager {
     }
 
     private HttpHeaders trimHeaders(HttpHeaders immutableHeaders, Set<String> ignoredHeaders, URI proxyUri) {
-        HttpHeaders mutable = new HttpHeaders(immutableHeaders);
-        ignoredHeaders.forEach(mutable::remove);
+        HttpHeaders mutable = new HttpHeaders();
+        immutableHeaders.forEach((key, value) -> {
+            if (!ignoredHeaders.contains(key)) {
+                mutable.put(key, value);
+            }
+        });
+
         List<String> auth = mutable.get("www-authenticate");
         // todo rewrite response url
         // Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
         if (auth != null) {
-            String bearer = auth.get(0);
+            String bearer = auth.getFirst();
             if (bearer.startsWith("Bearer") && bearer.contains("https://auth.docker.io/token")) {
                 String proxiedUrl = UrlUtil.proxyUrl("https://auth.docker.io/token", proxyUri);
                 String replaced = bearer.replace("https://auth.docker.io/token", proxiedUrl);

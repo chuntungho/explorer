@@ -6,6 +6,10 @@ spring:
       enabled: true
       max-file-size: 100MB
       max-request-size: 256MB
+  web:
+    resources:
+      # disable serving static resources
+      add-mappings: false
   threads:
     virtual:
       enabled: true

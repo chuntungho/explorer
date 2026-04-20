@@ -6,7 +6,6 @@ import com.chuntung.explorer.config.ExplorerProperties;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.RequestEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -45,7 +44,7 @@ public class BlockRuleHandler implements BlockHandler {
         return true;
     }
 
-    public boolean preHandle(URI uri, RequestEntity<?> requestEntity) {
+    public boolean preHandle(URI uri, HttpHeaders httpHeaders) {
         boolean allowed = true;
         for (BlockRule rule : blockRequest) {
             if (uri.getHost().matches(rule.getHostPattern())) {

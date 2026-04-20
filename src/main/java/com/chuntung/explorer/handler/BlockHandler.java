@@ -4,7 +4,6 @@ import com.chuntung.explorer.manager.HtmlResolver;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.RequestEntity;
 
 import java.net.URI;
 import java.util.Optional;
@@ -19,10 +18,10 @@ public interface BlockHandler {
      * Pre-handle request before accessing remote resource.
      *
      * @param uri real uri
-     * @param requestEntity
+     * @param httpHeaders
      * @return false if not to continue
      */
-    default boolean preHandle(URI uri, RequestEntity<?> requestEntity) {
+    default boolean preHandle(URI uri, HttpHeaders httpHeaders) {
         return true;
     }
 

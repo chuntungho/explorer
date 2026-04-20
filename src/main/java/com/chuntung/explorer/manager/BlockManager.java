@@ -6,7 +6,6 @@ import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.RequestEntity;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -22,10 +21,10 @@ public class BlockManager implements ApplicationContextAware {
         this.blockHandlers = applicationContext.getBeansOfType(BlockHandler.class).values();
     }
 
-    public boolean preHandle(URI remoteURI, RequestEntity<?> requestCopy) {
+    public boolean preHandle(URI remoteURI, HttpHeaders httpHeaders) {
         for (BlockHandler x : this.blockHandlers) {
             if (x.match(remoteURI)) {
-                if (!x.preHandle(remoteURI, requestCopy)) {
+                if (!x.preHandle(remoteURI, httpHeaders)) {
                     return false;
                 }
             }
