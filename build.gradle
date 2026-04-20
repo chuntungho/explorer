@@ -6,13 +6,13 @@ plugins {
     id 'org.springframework.boot' version '4.0.5'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'org.graalvm.buildtools.native' version '0.11.5'
-    id("org.openrewrite.rewrite") version("latest.release")
+//    id("org.openrewrite.rewrite") version("latest.release")
 }
 
-rewrite {
-    activeRecipe("org.openrewrite.java.spring.boot4.UpgradeSpringBoot_4_0")
-    setExportDatatables(true)
-}
+//rewrite {
+//    activeRecipe("org.openrewrite.java.spring.boot4.UpgradeSpringBoot_4_0")
+//    setExportDatatables(true)
+//}
 
 group = 'com.chuntung.explorer'
 version '1.0-SNAPSHOT'
@@ -23,7 +23,7 @@ repositories {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -33,9 +33,6 @@ dependencies {
     implementation('org.springframework.boot:spring-boot-starter-webmvc')
 
     // jsoup for handling html
-    implementation "org.springframework.boot:spring-boot-starter-webmvc-test"
-
-    // jsoup for handling html
     implementation 'org.jsoup:jsoup:1.22.1'
 
     // https://mvnrepository.com/artifact/org.brotli/dec
@@ -43,8 +40,9 @@ dependencies {
     implementation 'org.brotli:dec:0.1.2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation "org.springframework.boot:spring-boot-starter-webmvc-test"
 
-    rewrite("org.openrewrite.recipe:rewrite-spring:6.23.0")
+//    rewrite("org.openrewrite.recipe:rewrite-spring:6.23.0")
 }
 
 test {
@@ -62,7 +60,7 @@ graalvmNative {
 
 tasks.named('bootBuildImage') {
     imageName = 'explorer'
-    builder = 'paketobuildpacks/builder:tiny'
-    pullPolicy = 'IF_NOT_PRESENT'
-    environment = ['BP_NATIVE_IMAGE': 'true', 'BP_NATIVE_IMAGE_BUILD_ARGUMENTS': '-H:+AddAllCharsets -H:ExcludeResources=".*/application-local.yml$"']
+    builder = 'paketobuildpacks/builder-jammy-tiny'
+    pullPolicy = 'ALWAYS'
+    environment = ['BP_NATIVE_IMAGE': 'true', 'BP_NATIVE_IMAGE_BUILD_ARGUMENTS': '-H:+AddAllCharsets -H:ExcludeResources=".*/application-local.yml$"', 'BP_JVM_VERSION': '25']
 }

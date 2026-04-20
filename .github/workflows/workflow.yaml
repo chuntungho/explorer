@@ -25,7 +25,7 @@ jobs:
           java-version: '25'
           distribution: 'graalvm-community' # New 'distribution' option
           github-token: ${{ secrets.GITHUB_TOKEN }}
-#          native-image-job-reports: 'true'
+          native-image-job-reports: 'true'
 #          components: 'native-image'
           cache: 'gradle'
 
@@ -44,7 +44,7 @@ jobs:
 
       - name: Build image with Gradle
         run: |
-          gradle bootBuildImage --no-daemon
+          gradle bootBuildImage
           docker tag explorer ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           docker tag explorer ${{ env.IMAGE_NAME }}:latest
