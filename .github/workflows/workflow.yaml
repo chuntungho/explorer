@@ -3,7 +3,7 @@ name: Build Explorer
 on:
   workflow_dispatch: #  manual
   push:
-    branches: [ main ]
+    branches: [ main, webflux ]
     paths:
       - 'build.gradle'
       - 'src/**'

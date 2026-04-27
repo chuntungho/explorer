@@ -8,30 +8,35 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.*;
-import org.springframework.http.server.ServletServerHttpRequest;
+import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.http.codec.multipart.FormFieldPart;
+import org.springframework.http.codec.multipart.Part;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.MultipartHttpServletRequest;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Controller
 @CrossOrigin(originPatterns = "*", exposedHeaders = "*", allowCredentials = "true")
 public class ProxyController {
     private static final Logger logger = LoggerFactory.getLogger(ProxyController.class);
-    private ExplorerProperties explorerProperties;
-    private AssetManager assetManager;
-    private ProxyManager proxyManager;
+    private final ExplorerProperties explorerProperties;
+    private final AssetManager assetManager;
+    private final ProxyManager proxyManager;
 
     public ProxyController(ExplorerProperties explorerProperties, AssetManager assetManager, ProxyManager proxyManager) {
         this.explorerProperties = explorerProperties;
@@ -45,58 +50,120 @@ public class ProxyController {
      * <p>
      * e.g. {@code https://www-google-com.localhost/search?w=xxx}
      * will be parsed to {@code https://www.google.com/search?w=xxx}
-     *
      * </p>
-     *
-     * @param request
-     * @return
      */
     @RequestMapping(value = "/**", consumes = MediaType.ALL_VALUE)
-    public ResponseEntity<Resource> proxy(RequestEntity<ByteArrayResource> request) {
-        List<URI> uris = UrlUtil.splitUris(request.getUrl(), explorerProperties.getHostMappings());
+    public Mono<Void> proxy(ServerWebExchange exchange) {
+        ServerHttpRequest request = exchange.getRequest();
+        List<URI> uris = UrlUtil.splitUris(request.getURI(), explorerProperties.getHostMappings());
         if (uris.isEmpty()) {
-            String errMsg = "Invalid host: " + request.getUrl().getHost();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ByteArrayResource(errMsg.getBytes(StandardCharsets.UTF_8)));
+            String errMsg = "Invalid host: " + request.getURI().getHost();
+            exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
+            return exchange.getResponse().writeWith(
+                    Mono.just(exchange.getResponse().bufferFactory()
+                            .wrap(errMsg.getBytes(StandardCharsets.UTF_8))));
         }
 
         URI remoteURI = uris.get(0);
         URI proxyHostURI = uris.get(1);
-        return proxyManager.proxy(request, remoteURI, proxyHostURI);
+
+        return DataBufferUtils.join(request.getBody())
+                .map(dataBuffer -> {
+                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                    dataBuffer.read(bytes);
+                    DataBufferUtils.release(dataBuffer);
+                    return bytes;
+                })
+                .defaultIfEmpty(new byte[0])
+                .flatMap(bytes -> {
+                    RequestEntity<ByteArrayResource> requestEntity = new RequestEntity<>(
+                            bytes.length > 0 ? new ByteArrayResource(bytes) : null,
+                            request.getHeaders(),
+                            request.getMethod(),
+                            request.getURI());
+                    return proxyManager.proxy(exchange.getResponse(), requestEntity, remoteURI, proxyHostURI);
+                });
     }
 
     @RequestMapping(value = "/**", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Resource> proxyMultipart(MultipartHttpServletRequest request) {
-        ServletServerHttpRequest serverHttpRequest = new ServletServerHttpRequest(request);
-        URI uri = serverHttpRequest.getURI();
+    public Mono<Void> proxyMultipart(ServerWebExchange exchange) {
+        ServerHttpRequest request = exchange.getRequest();
+        URI uri = request.getURI();
 
         List<URI> uris = UrlUtil.splitUris(uri, explorerProperties.getHostMappings());
         if (uris.isEmpty()) {
             String errMsg = "Invalid host: " + uri.getHost();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ByteArrayResource(errMsg.getBytes(StandardCharsets.UTF_8)));
+            exchange.getResponse().setStatusCode(HttpStatus.BAD_REQUEST);
+            return exchange.getResponse().writeWith(
+                    Mono.just(exchange.getResponse().bufferFactory()
+                            .wrap(errMsg.getBytes(StandardCharsets.UTF_8))));
         }
         URI remoteURI = uris.get(0);
         URI proxyHostURI = uris.get(1);
 
-        // convert multipart to resource to be handled by ResourceHttpMessageConverter (valueType extends Resource)
-        // in FormHttpMessageConvertor (bodyType = MultiValueMap)
-        MultiValueMap<String, Resource> requestBody = new LinkedMultiValueMap<>();
-        request.getParameterMap().forEach((k, v) -> {
-            requestBody.put(k, Arrays.stream(v).map(x -> new ByteArrayResource(x.getBytes(StandardCharsets.UTF_8))).collect(Collectors.toList()));
-        });
-        request.getMultiFileMap().forEach((k, v) -> {
-            requestBody.put(k, v.stream().map(MultipartFile::getResource).collect(Collectors.toList()));
-        });
-        // remove content length as content will be written in new format
-        HttpHeaders requestHeaders = request.getRequestHeaders();
-        requestHeaders.remove("Content-Length");
+        return exchange.getMultipartData().flatMap(multipartData -> {
+            List<Mono<AbstractMap.SimpleEntry<String, Resource>>> entryMonos = new ArrayList<>();
 
-        RequestEntity<?> requestEntity = new RequestEntity<>(requestBody, requestHeaders, request.getRequestMethod(), uri, MultiValueMap.class);
-        return proxyManager.proxy(requestEntity, remoteURI, proxyHostURI);
+            multipartData.forEach((key, parts) -> {
+                for (Part part : parts) {
+                    Mono<AbstractMap.SimpleEntry<String, Resource>> entryMono;
+                    if (part instanceof FormFieldPart formField) {
+                        byte[] bytes = formField.value().getBytes(StandardCharsets.UTF_8);
+                        entryMono = Mono.just(new AbstractMap.SimpleEntry<>(key,
+                                (Resource) new ByteArrayResource(bytes)));
+                    } else if (part instanceof FilePart filePart) {
+                        entryMono = DataBufferUtils.join(filePart.content())
+                                .map(db -> {
+                                    byte[] bytes = new byte[db.readableByteCount()];
+                                    db.read(bytes);
+                                    DataBufferUtils.release(db);
+                                    return bytes;
+                                })
+                                .defaultIfEmpty(new byte[0])
+                                .map(bytes -> new AbstractMap.SimpleEntry<>(key, (Resource) new ByteArrayResource(bytes) {
+                                    @Override
+                                    public String getFilename() {
+                                        return filePart.filename();
+                                    }
+                                }));
+                    } else {
+                        entryMono = DataBufferUtils.join(part.content())
+                                .map(db -> {
+                                    byte[] bytes = new byte[db.readableByteCount()];
+                                    db.read(bytes);
+                                    DataBufferUtils.release(db);
+                                    return bytes;
+                                })
+                                .defaultIfEmpty(new byte[0])
+                                .map(bytes -> new AbstractMap.SimpleEntry<>(key,
+                                        (Resource) new ByteArrayResource(bytes)));
+                    }
+                    entryMonos.add(entryMono);
+                }
+            });
+
+            return Flux.fromIterable(entryMonos)
+                    .flatMap(m -> m)
+                    .collectList()
+                    .flatMap(entries -> {
+                        MultiValueMap<String, Resource> requestBody = new LinkedMultiValueMap<>();
+                        entries.forEach(e -> requestBody.add(e.getKey(), e.getValue()));
+
+                        // remove content headers — WebClient sets new Content-Type with boundary
+                        HttpHeaders requestHeaders = new HttpHeaders();
+                        requestHeaders.addAll(request.getHeaders());
+                        requestHeaders.remove(HttpHeaders.CONTENT_LENGTH);
+                        requestHeaders.remove(HttpHeaders.CONTENT_TYPE);
+
+                        RequestEntity<MultiValueMap<String, Resource>> requestEntity = new RequestEntity<>(
+                                requestBody, requestHeaders, request.getMethod(), uri);
+                        return proxyManager.proxy(exchange.getResponse(), requestEntity, remoteURI, proxyHostURI);
+                    });
+        });
     }
 
     @GetMapping(value = "/robots.txt")
-    public ResponseEntity<?> robots(RequestEntity<?> request) {
-        return assetManager.getAsset(request.getUrl().getPath());
+    public Mono<ResponseEntity<?>> robots(ServerHttpRequest request) {
+        return Mono.fromCallable(() -> assetManager.getAsset(request.getURI().getPath()));
     }
-
 }

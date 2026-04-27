@@ -1,59 +1,43 @@
 package com.chuntung.explorer.config;
 
-import org.springframework.boot.restclient.RestTemplateBuilder;
+import io.netty.channel.ChannelOption;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartResolver;
-import org.springframework.web.multipart.support.StandardServletMultipartResolver;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
-import java.net.SocketAddress;
-import java.time.Duration;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.transport.ProxyProvider;
 
 @Configuration(proxyBeanMethods = false)
 public class WebConfig {
 
-    /**
-     * As we need to convert target host, not to follow redirect.
-     */
-    public static class NoRedirectSimpleClientHttpRequestFactory extends SimpleClientHttpRequestFactory {
-        @Override
-        protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
-            super.prepareConnection(connection, httpMethod);
-            connection.setInstanceFollowRedirects(false);
+    @Bean
+    WebClient webClient(ExplorerProperties explorerProperties) {
+        HttpClient httpClient = HttpClient.create()
+                .followRedirect(false)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000);
+
+        ProxyProperties proxy = explorerProperties.getProxy();
+        if (proxy != null && Boolean.TRUE.equals(proxy.getEnabled())) {
+            httpClient = httpClient.proxy(spec -> spec
+                    .type(toProxyType(proxy.getType()))
+                    .host(proxy.getHost())
+                    .port(proxy.getPort()));
         }
+
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                // Raise in-memory limit for HTML collection; non-HTML is streamed via Flux<DataBuffer>
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+                .build();
     }
 
-    @Bean
-    StreamResourceHttpMessageConverter streamResourceHttpMessageConverter() {
-        return new StreamResourceHttpMessageConverter();
-    }
-
-    @Bean
-    // https://github.com/ItamarBenjamin/stream-rest-template
-    RestTemplate restTemplate(RestTemplateBuilder restTemplateBuilder, ExplorerProperties explorerProperties) {
-        return restTemplateBuilder
-                .connectTimeout(Duration.ofSeconds(10))
-                .requestFactory(() -> {
-                    NoRedirectSimpleClientHttpRequestFactory factory = new NoRedirectSimpleClientHttpRequestFactory();
-                    ProxyProperties proxy = explorerProperties.getProxy();
-                    if (proxy != null && Boolean.TRUE.equals(proxy.getEnabled())) {
-                        SocketAddress address = new InetSocketAddress(proxy.getHost(), proxy.getPort());
-                        factory.setProxy(new Proxy(proxy.getType(), address));
-                    }
-                    return factory;
-                })
-                .configure(new StreamRestTemplate());
-    }
-
-    @Bean
-    public MultipartResolver multipartResolver() {
-        return new StandardServletMultipartResolver();
+    private ProxyProvider.Proxy toProxyType(java.net.Proxy.Type type) {
+        return switch (type) {
+            case SOCKS -> ProxyProvider.Proxy.SOCKS5;
+            case HTTP -> ProxyProvider.Proxy.HTTP;
+            default -> throw new IllegalArgumentException("Unsupported proxy type: " + type);
+        };
     }
 
     @Bean

@@ -5,12 +5,16 @@ import com.chuntung.explorer.util.UrlUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.core.io.Resource;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.*;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientResponseException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -21,20 +25,26 @@ import java.util.Set;
 @Component
 public class ProxyManager {
     private static final Logger logger = LoggerFactory.getLogger(ProxyManager.class);
-    private ExplorerProperties explorerProperties;
-    private BlockManager adBlocker;
-    private RestTemplate restTemplate;
-    private HtmlResolver htmlResolver;
+    private final ExplorerProperties explorerProperties;
+    private final BlockManager adBlocker;
+    private final WebClient webClient;
+    private final HtmlResolver htmlResolver;
 
-    public ProxyManager(ExplorerProperties explorerProperties, BlockManager adBlocker, RestTemplate restTemplate, HtmlResolver htmlResolver) {
+    public ProxyManager(ExplorerProperties explorerProperties, BlockManager adBlocker, WebClient webClient, HtmlResolver htmlResolver) {
         this.explorerProperties = explorerProperties;
         this.adBlocker = adBlocker;
-        this.restTemplate = restTemplate;
+        this.webClient = webClient;
         this.htmlResolver = htmlResolver;
     }
 
-    public ResponseEntity<Resource> proxy(RequestEntity<?> request, URI remoteURI, URI proxyURI) {
-        HttpHeaders requestHeaders = trimHeaders(request.getHeaders(), explorerProperties.getProxyHeaders(), proxyURI);
+    /**
+     * Proxy the request and write the response directly to {@code serverResponse}.
+     * <p>
+     * HTML responses are collected, modified by {@link HtmlResolver}, then written.
+     * All other responses are piped as a {@code Flux<DataBuffer>} — no intermediate buffering.
+     */
+    public Mono<Void> proxy(ServerHttpResponse serverResponse, RequestEntity<?> request, URI remoteURI, URI proxyURI) {
+        HttpHeaders requestHeaders = copyAndTrimHeaders(request.getHeaders(), explorerProperties.getProxyHeaders(), proxyURI);
 
         // replace host with remote host
         for (String x : explorerProperties.getTransformHeaders()) {
@@ -44,7 +54,7 @@ public class ProxyManager {
                     continue;
                 }
                 String url = requestHeaders.getFirst(x);
-                if (url != null && url.contains("//") & url.contains(proxyURI.getHost())) {
+                if (url != null && url.contains("//") && url.contains(proxyURI.getHost())) {
                     List<URI> uris = UrlUtil.splitUris(UrlUtil.toURI(url), explorerProperties.getHostMappings());
                     if (!uris.isEmpty()) {
                         requestHeaders.set(x, uris.get(0).toString());
@@ -59,50 +69,100 @@ public class ProxyManager {
         // preHandle block ads
         if (!adBlocker.preHandle(remoteURI, requestCopy)) {
             logger.debug("Blocked request: {}", remoteURI);
-            return ResponseEntity.noContent().build();
+            serverResponse.setStatusCode(HttpStatus.NO_CONTENT);
+            return serverResponse.setComplete();
         }
 
         Set<String> excludedHeaders = getExcludedHeaders(requestHeaders.getOrigin() != null);
-        try {
-            ResponseEntity<? extends Resource> responseEntity =
-                    restTemplate.exchange(requestCopy, InputStreamResource.class);
-            HttpStatusCode statusCode = responseEntity.getStatusCode();
-            HttpHeaders responseHeaders = trimHeaders(responseEntity.getHeaders(), excludedHeaders, proxyURI);
-            Resource body = responseEntity.getBody();
 
-            // handle redirect, just let browser redirect to converted url as the html may contain relative paths
-            if (statusCode.is3xxRedirection() && responseHeaders.getLocation() != null) {
-                String destUrl = UrlUtil.proxyUrl(responseHeaders.getLocation().toString(), proxyURI);
-                responseHeaders.set("Location", destUrl);
-                return new ResponseEntity<>(body, responseHeaders, statusCode);
-            }
+        WebClient.RequestBodySpec requestBodySpec = webClient.method(request.getMethod())
+                .uri(remoteURI)
+                .headers(h -> h.addAll(requestHeaders));
 
-            // resolve html
-            MediaType contentType = responseHeaders.getContentType();
-            if (contentType != null && contentType.isCompatibleWith(MediaType.TEXT_HTML) && body != null) {
-                ExplorerSetting setting = new ExplorerSetting(request.getUrl().getRawQuery());
-                Resource resolved = htmlResolver.resolve(body, responseHeaders, remoteURI, proxyURI, setting);
-                return new ResponseEntity<>(resolved, responseHeaders, statusCode);
-            } else {
-                return new ResponseEntity<>(body, responseHeaders, statusCode);
-            }
-        } catch (RestClientResponseException e) {
-            logger.info("{}, invalid request: {}", e.getStatusCode(), remoteURI);
-            return new ResponseEntity<>(e.getResponseBodyAs(ByteArrayResource.class)
-                    , trimHeaders(e.getResponseHeaders(), excludedHeaders, proxyURI), e.getStatusCode());
-        } catch (Exception e) {
-            logger.warn("Failed to handle request: {}", remoteURI, e);
-            return new ResponseEntity<>(new ByteArrayResource(e.getMessage().getBytes(StandardCharsets.UTF_8)), HttpStatus.BAD_GATEWAY);
-        }
+        URI requestUrl = request.getUrl();
+
+        return buildBody(requestBodySpec, request.getBody())
+                .exchangeToMono(clientResponse -> {
+                    HttpStatusCode statusCode = clientResponse.statusCode();
+                    HttpHeaders responseHeaders = copyAndTrimHeaders(
+                            clientResponse.headers().asHttpHeaders(), excludedHeaders, proxyURI);
+
+                    // handle redirect — let the browser redirect to the converted URL
+                    if (statusCode.is3xxRedirection() && responseHeaders.getLocation() != null) {
+                        String destUrl = UrlUtil.proxyUrl(responseHeaders.getLocation().toString(), proxyURI);
+                        responseHeaders.set("Location", destUrl);
+                        applyToResponse(serverResponse, statusCode, responseHeaders);
+                        return serverResponse.writeWith(clientResponse.bodyToFlux(DataBuffer.class));
+                    }
+
+                    // resolve HTML
+                    MediaType contentType = responseHeaders.getContentType();
+                    if (contentType != null && contentType.isCompatibleWith(MediaType.TEXT_HTML)) {
+                        ExplorerSetting setting = new ExplorerSetting(
+                                requestUrl != null ? requestUrl.getRawQuery() : null);
+                        return clientResponse.bodyToMono(byte[].class)
+                                .defaultIfEmpty(new byte[0])
+                                .flatMap(bytes -> Mono.fromCallable(() ->
+                                        htmlResolver.resolve(new ByteArrayResource(bytes),
+                                                responseHeaders, remoteURI, proxyURI, setting)
+                                ).subscribeOn(Schedulers.boundedElastic()))
+                                .flatMap(resolved -> {
+                                    // htmlResolver may have modified responseHeaders (Content-Encoding, Content-Length)
+                                    applyToResponse(serverResponse, statusCode, responseHeaders);
+                                    return Mono.fromCallable(() -> resolved.getInputStream().readAllBytes())
+                                            .subscribeOn(Schedulers.boundedElastic())
+                                            .flatMap(b -> serverResponse.writeWith(
+                                                    Mono.just(serverResponse.bufferFactory().wrap(b))));
+                                });
+                    }
+
+                    // stream non-HTML body directly — no buffering
+                    applyToResponse(serverResponse, statusCode, responseHeaders);
+                    Flux<DataBuffer> bodyFlux = clientResponse.bodyToFlux(DataBuffer.class);
+                    return serverResponse.writeWith(bodyFlux);
+                })
+                .onErrorResume(e -> {
+                    logger.warn("Failed to handle request: {}", remoteURI, e);
+                    serverResponse.setStatusCode(HttpStatus.BAD_GATEWAY);
+                    String msg = e.getMessage() != null ? e.getMessage() : "Bad Gateway";
+                    return serverResponse.writeWith(
+                            Mono.just(serverResponse.bufferFactory().wrap(msg.getBytes(StandardCharsets.UTF_8))));
+                });
     }
 
-    private Set<String> getExcludedHeaders(Boolean cors) {
+    private void applyToResponse(ServerHttpResponse response, HttpStatusCode statusCode, HttpHeaders headers) {
+        response.setStatusCode(statusCode);
+        headers.forEach((k, v) -> {
+            if (!k.equalsIgnoreCase(HttpHeaders.TRANSFER_ENCODING)) {
+                response.getHeaders().put(k, v);
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private WebClient.RequestHeadersSpec<?> buildBody(WebClient.RequestBodySpec spec, Object body) {
+        if (body == null) {
+            return spec;
+        }
+        if (body instanceof byte[] bytes) {
+            return bytes.length > 0 ? spec.bodyValue(bytes) : spec;
+        }
+        if (body instanceof ByteArrayResource resource) {
+            byte[] bytes = resource.getByteArray();
+            return bytes.length > 0 ? spec.bodyValue(bytes) : spec;
+        }
+        if (body instanceof MultiValueMap<?, ?> multiValueMap) {
+            return spec.body(BodyInserters.fromMultipartData((MultiValueMap<String, ?>) multiValueMap));
+        }
+        return spec.bodyValue(body);
+    }
+
+    private Set<String> getExcludedHeaders(boolean cors) {
         Set<String> excludedHeaders = new HashSet<>();
         if (explorerProperties.getExcludedHeaders() != null) {
             excludedHeaders.addAll(explorerProperties.getExcludedHeaders());
         }
-        // Exclude CORS (Cross-origin resource sharing) headers from remote server as it is handled by spring mvc
-        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Allow-Credentials
+        // Exclude CORS headers from remote server — handled by Spring WebFlux
         if (cors) {
             excludedHeaders.add("Access-Control-Allow-Origin");
             excludedHeaders.add("Access-Control-Allow-Credentials");
@@ -112,9 +172,12 @@ public class ProxyManager {
         return excludedHeaders;
     }
 
-    private HttpHeaders trimHeaders(HttpHeaders immutableHeaders, Set<String> ignoredHeaders, URI proxyUri) {
-        HttpHeaders mutable = new HttpHeaders(immutableHeaders);
-        ignoredHeaders.forEach(mutable::remove);
+    private HttpHeaders copyAndTrimHeaders(HttpHeaders source, Set<String> ignoredHeaders, URI proxyUri) {
+        HttpHeaders mutable = new HttpHeaders();
+        mutable.addAll(source);
+        if (ignoredHeaders != null) {
+            ignoredHeaders.forEach(mutable::remove);
+        }
         List<String> auth = mutable.get("www-authenticate");
         // todo rewrite response url
         // Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
@@ -122,8 +185,7 @@ public class ProxyManager {
             String bearer = auth.get(0);
             if (bearer.startsWith("Bearer") && bearer.contains("https://auth.docker.io/token")) {
                 String proxiedUrl = UrlUtil.proxyUrl("https://auth.docker.io/token", proxyUri);
-                String replaced = bearer.replace("https://auth.docker.io/token", proxiedUrl);
-                mutable.set("www-authenticate", replaced);
+                mutable.set("www-authenticate", bearer.replace("https://auth.docker.io/token", proxiedUrl));
             }
         }
         return mutable;

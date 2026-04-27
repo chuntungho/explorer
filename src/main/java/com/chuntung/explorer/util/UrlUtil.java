@@ -7,10 +7,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class UrlUtil {
@@ -34,7 +31,9 @@ public final class UrlUtil {
         }
 
         String prefix = concatHost.substring(0, dotIdx);
-        String remoteHost = decodeHost(prefix);
+        // get remote host from query param if existing
+        String h0st = parseQueryParam(requestURL.getRawQuery(), "h0st");
+        String remoteHost = h0st != null ? h0st : decodeHost(prefix);
         int port = -1;
         int lastDot = remoteHost.lastIndexOf('.');
         // try parsing port
@@ -49,7 +48,9 @@ public final class UrlUtil {
 
         // append .com automatically
         if (remoteHost.indexOf('.') == -1 && !"localhost".equals(remoteHost)) {
-            remoteHost = hostMapping.getOrDefault(remoteHost, remoteHost + ".com");
+            remoteHost = hostMapping != null
+                    ? hostMapping.getOrDefault(remoteHost, remoteHost + ".com")
+                    : remoteHost + ".com";
         }
 
         // replace scheme, host and port for remote uri
@@ -106,14 +107,30 @@ public final class UrlUtil {
             if (!origHost.endsWith(proxyURI.getHost())) {
                 String encodedHost = encodeHost(origHost, remoteURI);
                 String destHost = encodedHost + "." + proxyURI.getHost();
+                // store orig host to query param if too long
+                Optional<String> origHostOpt =  encodedHost.startsWith("md5-") ? Optional.of(origHost) : Optional.empty();
                 url = UriComponentsBuilder.fromUriString(remoteUrl)
                         .scheme(proxyURI.getScheme()).host(destHost).port(proxyURI.getPort())
+                        .queryParamIfPresent("h0st", origHostOpt)
                         .build().toString();
             }
         }
 
         return url;
     }
+
+    /** Extract the first value of {@code name} from a raw (already-decoded) query string. */
+    private static String parseQueryParam(String rawQuery, String name) {
+    if (rawQuery == null) return null;
+    String prefix = name + "=";
+    for (String param : rawQuery.split("&")) {
+      if (param.startsWith(prefix)) {
+              return param.substring(prefix.length());
+          }
+            }
+        return null;
+    }
+
 
     private static String encodeHost(String origHost, URI remoteURI) {
         String encoded = origHost.replace("-", "--").replace('.', '-')

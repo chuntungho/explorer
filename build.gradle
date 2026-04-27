@@ -30,17 +30,16 @@ java {
 [compileJava,compileTestJava,javadoc]*.options*.encoding = 'UTF-8'
 
 dependencies {
-    implementation('org.springframework.boot:spring-boot-starter-webmvc')
+    implementation('org.springframework.boot:spring-boot-starter-webflux')
 
     // jsoup for handling html
     implementation 'org.jsoup:jsoup:1.22.1'
 
     // https://mvnrepository.com/artifact/org.brotli/dec
-    implementation "org.springframework.boot:spring-boot-starter-restclient"
     implementation 'org.brotli:dec:0.1.2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation "org.springframework.boot:spring-boot-starter-webmvc-test"
+    testImplementation 'io.projectreactor:reactor-test'
 
 //    rewrite("org.openrewrite.recipe:rewrite-spring:6.23.0")
 }
