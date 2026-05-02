@@ -1,11 +1,9 @@
 package com.chuntung.explorer;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import io.micronaut.runtime.Micronaut;
 
-@SpringBootApplication(proxyBeanMethods = false)
 public class MainApplication {
     public static void main(String[] args) {
-        SpringApplication.run(MainApplication.class, args);
+        Micronaut.run(MainApplication.class, args);
     }
 }

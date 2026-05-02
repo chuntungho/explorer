@@ -1,7 +1,10 @@
 package com.chuntung.explorer.config;
 
+import io.micronaut.core.annotation.Introspected;
+
 import java.net.Proxy;
 
+@Introspected
 class ProxyProperties {
     private Boolean enabled;
     private Proxy.Type type;

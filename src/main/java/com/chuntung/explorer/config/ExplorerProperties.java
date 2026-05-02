@@ -1,12 +1,14 @@
 package com.chuntung.explorer.config;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import io.micronaut.context.annotation.ConfigurationProperties;
+import io.micronaut.core.annotation.Introspected;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 @ConfigurationProperties("explorer")
+@Introspected
 public class ExplorerProperties {
 
     // support proxy

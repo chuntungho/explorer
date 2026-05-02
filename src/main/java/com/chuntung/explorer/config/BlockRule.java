@@ -1,8 +1,11 @@
 package com.chuntung.explorer.config;
 
+import io.micronaut.core.annotation.Introspected;
+
 import java.util.List;
 import java.util.Map;
 
+@Introspected
 public class BlockRule {
     private String hostPattern;
     private List<String> blockPaths;

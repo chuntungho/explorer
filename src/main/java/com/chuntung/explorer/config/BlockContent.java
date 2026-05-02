@@ -1,7 +1,10 @@
 package com.chuntung.explorer.config;
 
+import io.micronaut.core.annotation.Introspected;
+
 import java.util.Map;
 
+@Introspected
 public class BlockContent {
 
     private String selector;
