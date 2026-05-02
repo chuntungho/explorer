@@ -1,18 +1,15 @@
 package com.chuntung.explorer.handler;
 
 import com.chuntung.explorer.config.ExplorerProperties;
-import org.springframework.http.RequestEntity;
-import org.springframework.stereotype.Component;
+import io.micronaut.http.HttpRequest;
+import jakarta.inject.Singleton;
 
 import java.net.URI;
 import java.util.List;
 
-/**
- * Block request which domain exists in black list.
- */
-@Component
+@Singleton
 public class DomainBlackListHandler implements BlockHandler {
-    private List<String> domainBlackList;
+    private final List<String> domainBlackList;
 
     public DomainBlackListHandler(ExplorerProperties explorerProperties) {
         domainBlackList = explorerProperties.getDomainBlackList();
@@ -20,9 +17,7 @@ public class DomainBlackListHandler implements BlockHandler {
 
     @Override
     public boolean match(URI uri) {
-        if (domainBlackList == null) {
-            return false;
-        }
+        if (domainBlackList == null) return false;
         for (String domain : domainBlackList) {
             int idx = uri.getHost().lastIndexOf(domain);
             if (idx == 0 || (idx > 0 && uri.getHost().charAt(idx - 1) == '.')) {
@@ -32,7 +27,8 @@ public class DomainBlackListHandler implements BlockHandler {
         return false;
     }
 
-    public boolean preHandle(URI uri, RequestEntity<?> requestEntity) {
+    @Override
+    public boolean preHandle(URI uri, HttpRequest<?> request) {
         return false;
     }
 }

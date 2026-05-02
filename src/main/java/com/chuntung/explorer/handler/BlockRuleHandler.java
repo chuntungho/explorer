@@ -3,12 +3,11 @@ package com.chuntung.explorer.handler;
 import com.chuntung.explorer.config.BlockContent;
 import com.chuntung.explorer.config.BlockRule;
 import com.chuntung.explorer.config.ExplorerProperties;
+import io.micronaut.http.HttpRequest;
+import io.micronaut.http.MutableHttpHeaders;
+import jakarta.inject.Singleton;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.RequestEntity;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.net.URI;
 import java.time.LocalDate;
@@ -17,13 +16,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/**
- * Block request or content by defined rules.
- */
-@Component
+@Singleton
 public class BlockRuleHandler implements BlockHandler {
-    private ExplorerProperties explorerProperties;
-
+    private final ExplorerProperties explorerProperties;
     private List<BlockRule> blockRequest = Collections.emptyList();
     private List<BlockRule> blockResponse = Collections.emptyList();
 
@@ -41,32 +36,33 @@ public class BlockRuleHandler implements BlockHandler {
                 .collect(Collectors.toList());
     }
 
+    @Override
     public boolean match(URI uri) {
         return true;
     }
 
-    public boolean preHandle(URI uri, RequestEntity<?> requestEntity) {
-        boolean allowed = true;
+    @Override
+    public boolean preHandle(URI uri, HttpRequest<?> request) {
         for (BlockRule rule : blockRequest) {
             if (uri.getHost().matches(rule.getHostPattern())) {
                 for (String blockPath : rule.getBlockPaths()) {
                     if (uri.getPath().matches(blockPath)) {
-                        allowed = false;
+                        return false;
                     }
                 }
             }
         }
-
-        return allowed;
+        return true;
     }
 
-    public void postHtmlHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
+    @Override
+    public void postHtmlHandle(URI proxyURI, URI uri, MutableHttpHeaders responseHeaders, Document document) {
         blockResponse.stream()
                 .filter(x -> uri.getHost().matches(x.getHostPattern()))
                 .forEach(x -> {
                     if (x.getBlockHeaders() != null) {
                         x.getBlockHeaders().forEach((k, v) -> {
-                            if (StringUtils.hasLength(v)) {
+                            if (v != null && !v.isEmpty()) {
                                 responseHeaders.add(k, v);
                             } else {
                                 responseHeaders.remove(k);
@@ -91,14 +87,13 @@ public class BlockRuleHandler implements BlockHandler {
     private void customize(URI uri, Elements elements, BlockContent cfg) {
         if (cfg.getAttributes() != null) {
             cfg.getAttributes().forEach((k, v) -> {
-                if (StringUtils.hasLength(v)) {
+                if (v != null && !v.isEmpty()) {
                     elements.attr(k, v);
                 } else {
                     elements.removeAttr(k);
                 }
             });
         }
-
         elements.forEach(x -> {
             if (cfg.getReplace() != null) {
                 String replacement = cfg.getReplace();
@@ -107,12 +102,8 @@ public class BlockRuleHandler implements BlockHandler {
                 }
                 x.html(replacement);
             }
-            if (cfg.getPrepend() != null) {
-                x.prepend(cfg.getPrepend());
-            }
-            if (cfg.getAppend() != null) {
-                x.append(cfg.getAppend());
-            }
+            if (cfg.getPrepend() != null) x.prepend(cfg.getPrepend());
+            if (cfg.getAppend() != null) x.append(cfg.getAppend());
         });
     }
 }

@@ -1,17 +1,13 @@
 package com.chuntung.explorer.handler;
 
 import com.chuntung.explorer.config.ExplorerProperties;
+import io.micronaut.http.MutableHttpHeaders;
+import jakarta.inject.Singleton;
 import org.jsoup.nodes.Document;
-import org.springframework.http.HttpHeaders;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.net.URI;
 
-/**
- * Inject interceptor script for HTML.
- */
-@Component
+@Singleton
 public class BrowserInterceptor implements BlockHandler {
     public static final String REMOTE_URL_META = "<meta name=\"remote-url\" content=\"{remoteUrl}\">";
     public static final String EXPLORER_URL_META = "<meta name=\"explorer-url\" content=\"{explorerUrl}\">";
@@ -30,11 +26,13 @@ public class BrowserInterceptor implements BlockHandler {
     }
 
     @Override
-    public void postHtmlHandle(URI proxyURI, URI uri, HttpHeaders responseHeaders, Document document) {
-        String explorerUrl = StringUtils.hasLength(explorerProperties.getUrl()) ? explorerProperties.getUrl() : proxyURI.toString();
-        // todo wildcard host with port
-        String wildcardHost = StringUtils.hasLength(explorerProperties.getWildcardHost()) ? explorerProperties.getWildcardHost() : proxyURI.getHost();
-        String interceptorUrl = StringUtils.hasLength(explorerProperties.getInterceptorUrl()) ? explorerProperties.getInterceptorUrl() : (explorerUrl + "/interceptor.js");
+    public void postHtmlHandle(URI proxyURI, URI uri, MutableHttpHeaders responseHeaders, Document document) {
+        String url = explorerProperties.getUrl();
+        String explorerUrl = (url != null && !url.isEmpty()) ? url : proxyURI.toString();
+        String wh = explorerProperties.getWildcardHost();
+        String wildcardHost = (wh != null && !wh.isEmpty()) ? wh : proxyURI.getHost();
+        String iu = explorerProperties.getInterceptorUrl();
+        String interceptorUrl = (iu != null && !iu.isEmpty()) ? iu : (explorerUrl + "/interceptor.js");
 
         document.head().prepend(INTERCEPTOR_SCRIPT.replace("{interceptorUrl}", interceptorUrl));
         document.head().prepend(REMOTE_URL_META.replace("{remoteUrl}", uri.toString()));
