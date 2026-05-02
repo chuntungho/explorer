@@ -31,7 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Controller
-@CrossOrigin(originPatterns = "*", exposedHeaders = "*", allowCredentials = "true")
+@CrossOrigin(origins = "*", exposedHeaders = "*")
 public class ProxyController {
     private static final Logger logger = LoggerFactory.getLogger(ProxyController.class);
     private final ExplorerProperties explorerProperties;

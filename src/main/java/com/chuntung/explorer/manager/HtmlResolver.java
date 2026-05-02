@@ -46,6 +46,10 @@ public class HtmlResolver {
      */
     public ByteArrayResource resolve(Resource resource, HttpHeaders responseHeaders, URI remoteURI, URI proxyURI, ExplorerSetting setting)
             throws IOException {
+        if (resource.contentLength() == 0) {
+            return new ByteArrayResource(new byte[0]);
+        }
+
         String charset = getCharset(responseHeaders, setting);
         String encoding = responseHeaders.getFirst("Content-Encoding");
         InputStream in = resource.getInputStream();

@@ -17,6 +17,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
@@ -57,7 +58,7 @@ public class ProxyManager {
                 if (url != null && url.contains("//") && url.contains(proxyURI.getHost())) {
                     List<URI> uris = UrlUtil.splitUris(UrlUtil.toURI(url), explorerProperties.getHostMappings());
                     if (!uris.isEmpty()) {
-                        requestHeaders.set(x, uris.get(0).toString());
+                        requestHeaders.set(x, uris.getFirst().toString());
                     }
                 }
             }
@@ -86,6 +87,15 @@ public class ProxyManager {
                     HttpStatusCode statusCode = clientResponse.statusCode();
                     HttpHeaders responseHeaders = copyAndTrimHeaders(
                             clientResponse.headers().asHttpHeaders(), excludedHeaders, proxyURI);
+
+                    // Translate ACAO from the remote origin to its proxy equivalent; default to * if absent
+                    String acao = responseHeaders.getFirst(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN);
+                    if (acao != null && !acao.equals("*")) {
+                        responseHeaders.set(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, UrlUtil.proxyUrl(acao, proxyURI));
+                        responseHeaders.set(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
+                    } else if (acao == null) {
+                        responseHeaders.set(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+                    }
 
                     // handle redirect — let the browser redirect to the converted URL
                     if (statusCode.is3xxRedirection() && responseHeaders.getLocation() != null) {
@@ -122,7 +132,11 @@ public class ProxyManager {
                     return serverResponse.writeWith(bodyFlux);
                 })
                 .onErrorResume(e -> {
-                    logger.warn("Failed to handle request: {}", remoteURI, e);
+                    if (e instanceof UnknownHostException || e.getCause() instanceof UnknownHostException) {
+                        logger.debug("DNS resolution failed for: {}", remoteURI);
+                    } else {
+                        logger.warn("Failed to handle request: {}", remoteURI, e);
+                    }
                     serverResponse.setStatusCode(HttpStatus.BAD_GATEWAY);
                     String msg = e.getMessage() != null ? e.getMessage() : "Bad Gateway";
                     return serverResponse.writeWith(
@@ -162,9 +176,8 @@ public class ProxyManager {
         if (explorerProperties.getExcludedHeaders() != null) {
             excludedHeaders.addAll(explorerProperties.getExcludedHeaders());
         }
-        // Exclude CORS headers from remote server — handled by Spring WebFlux
+        // Exclude CORS method/header metadata from remote — translated ACAO is set in proxy()
         if (cors) {
-            excludedHeaders.add("Access-Control-Allow-Origin");
             excludedHeaders.add("Access-Control-Allow-Credentials");
             excludedHeaders.add("Access-Control-Allow-Methods");
             excludedHeaders.add("Access-Control-Allow-Headers");

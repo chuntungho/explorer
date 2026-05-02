@@ -12,10 +12,10 @@ spring:
 
 server:
 #  port: 2024
-  max-http-request-header-size: 64KB
-  tomcat:
+  max-http-request-header-size: 128KB
+  tomcat: # use netty
     # refer to ServerProperties
-    max-http-response-header-size: 64KB
+    max-http-response-header-size: 128KB
 
     # allow special chars
     relaxedQueryChars: <,>,[,\,\,],^,`,{,|,}
