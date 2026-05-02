@@ -1,41 +1,35 @@
 package com.chuntung.explorer.manager;
 
 import com.chuntung.explorer.handler.BlockHandler;
+import io.micronaut.http.HttpRequest;
+import io.micronaut.http.MutableHttpHeaders;
+import jakarta.inject.Singleton;
 import org.jsoup.nodes.Document;
-import org.springframework.beans.BeansException;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.RequestEntity;
-import org.springframework.stereotype.Component;
 
 import java.net.URI;
 import java.util.Collection;
 
-@Component
-public class BlockManager implements ApplicationContextAware {
-    private Collection<BlockHandler> blockHandlers;
+@Singleton
+public class BlockManager {
+    private final Collection<BlockHandler> blockHandlers;
 
-    @Override
-    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        // todo sort by order
-        this.blockHandlers = applicationContext.getBeansOfType(BlockHandler.class).values();
+    public BlockManager(Collection<BlockHandler> blockHandlers) {
+        this.blockHandlers = blockHandlers;
     }
 
-    public boolean preHandle(URI remoteURI, RequestEntity<?> requestCopy) {
-        for (BlockHandler x : this.blockHandlers) {
+    public boolean preHandle(URI remoteURI, HttpRequest<?> request) {
+        for (BlockHandler x : blockHandlers) {
             if (x.match(remoteURI)) {
-                if (!x.preHandle(remoteURI, requestCopy)) {
+                if (!x.preHandle(remoteURI, request)) {
                     return false;
                 }
             }
         }
-
         return true;
     }
 
-    public void postHandle(URI proxyURI, URI remoteURI, HttpHeaders responseHeaders, Document document){
-        this.blockHandlers.forEach(x -> {
+    public void postHandle(URI proxyURI, URI remoteURI, MutableHttpHeaders responseHeaders, Document document) {
+        blockHandlers.forEach(x -> {
             if (x.match(remoteURI)) {
                 x.postHtmlHandle(proxyURI, remoteURI, responseHeaders, document);
             }
