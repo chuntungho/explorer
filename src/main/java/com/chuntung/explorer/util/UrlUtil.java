@@ -1,12 +1,8 @@
 package com.chuntung.explorer.util;
 
-import org.springframework.util.DigestUtils;
-import org.springframework.web.util.UriComponentsBuilder;
-
-import java.net.MalformedURLException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -17,11 +13,6 @@ public final class UrlUtil {
 
     /**
      * Split request url into remote url with query and proxy host only url.
-     *
-     * @param requestURL
-     * @return
-     * @throws MalformedURLException
-     * @throws URISyntaxException
      */
     public static List<URI> splitUris(URI requestURL, Map<String, String> hostMapping) {
         String concatHost = requestURL.getHost();
@@ -31,12 +22,10 @@ public final class UrlUtil {
         }
 
         String prefix = concatHost.substring(0, dotIdx);
-        // get remote host from query param if existing
         String h0st = parseQueryParam(requestURL.getRawQuery(), "h0st");
         String remoteHost = h0st != null ? h0st : decodeHost(prefix);
         int port = -1;
         int lastDot = remoteHost.lastIndexOf('.');
-        // try parsing port
         if (lastDot > -1) {
             try {
                 port = Integer.parseInt(remoteHost.substring(lastDot + 1));
@@ -46,27 +35,35 @@ public final class UrlUtil {
             }
         }
 
-        // append .com automatically
         if (remoteHost.indexOf('.') == -1 && !"localhost".equals(remoteHost)) {
             remoteHost = hostMapping != null
                     ? hostMapping.getOrDefault(remoteHost, remoteHost + ".com")
                     : remoteHost + ".com";
         }
 
-        // replace scheme, host and port for remote uri
-        UriComponentsBuilder remoteUriBuilder = UriComponentsBuilder.fromUri(requestURL)
-                .scheme("localhost".equals(remoteHost) ? "http" : "https").host(remoteHost).port(port);
+        String scheme = "localhost".equals(remoteHost) ? "http" : "https";
+        String rawPath = requestURL.getRawPath();
+        String rawQuery = requestURL.getRawQuery();
+        StringBuilder remoteUriSb = new StringBuilder();
+        remoteUriSb.append(scheme).append("://").append(remoteHost);
+        if (port > 0) remoteUriSb.append(':').append(port);
+        if (rawPath != null && !rawPath.isEmpty()) remoteUriSb.append(rawPath);
+        if (rawQuery != null) remoteUriSb.append('?').append(rawQuery);
+
         URI remoteURI;
         try {
-            remoteURI = remoteUriBuilder.build(true).toUri();
+            remoteURI = URI.create(remoteUriSb.toString());
         } catch (IllegalArgumentException e) {
-            // fallback: remove query, such as `q=paq:[0,0,null,null,0]`
-            remoteURI = remoteUriBuilder.query(null).build(true).toUri();
+            // fallback: strip query
+            int q = remoteUriSb.indexOf("?");
+            remoteURI = URI.create(q >= 0 ? remoteUriSb.substring(0, q) : remoteUriSb.toString());
         }
 
         String proxyHost = concatHost.substring(dotIdx + 1);
-        URI proxyHostURI = UriComponentsBuilder.fromUri(requestURL)
-                .host(proxyHost).replacePath(null).query(null).build(true).toUri();
+        StringBuilder proxyHostSb = new StringBuilder();
+        proxyHostSb.append(requestURL.getScheme()).append("://").append(proxyHost);
+        if (requestURL.getPort() > 0) proxyHostSb.append(':').append(requestURL.getPort());
+        URI proxyHostURI = URI.create(proxyHostSb.toString());
 
         return Arrays.asList(remoteURI, proxyHostURI);
     }
@@ -75,8 +72,8 @@ public final class UrlUtil {
         if (prefix.startsWith("md5-") && hostCache.containsKey(prefix)) {
             prefix = hostCache.get(prefix);
         }
-        return prefix.replace("--", "~") // decode '--'
-                .replace('-', '.') // replace '-' with '.'
+        return prefix.replace("--", "~")
+                .replace('-', '.')
                 .replace('~', '-');
     }
 
@@ -86,12 +83,8 @@ public final class UrlUtil {
      * e.g.
      * {@code https://www.domain.com:8443/search?w=xxx}
      * will be converted to
-     * {@code https://www-damain-com_8443.localhost:2024/search?w=xxx}
+     * {@code https://www-domain-com-8443.localhost:2024/search?w=xxx}
      * </p>
-     *
-     * @param remoteUrl
-     * @param proxyURI
-     * @return
      */
     public static String proxyUrl(String remoteUrl, URI proxyURI) {
         String url = remoteUrl;
@@ -100,19 +93,26 @@ public final class UrlUtil {
         }
 
         if (remoteUrl.toLowerCase().startsWith("http://") || remoteUrl.toLowerCase().startsWith("https://")) {
-            //  convert host and prepend to proxy host
             URI remoteURI = toURI(remoteUrl);
             String origHost = remoteURI.getHost();
             // may be redirected by remote server, avoid convert twice
             if (!origHost.endsWith(proxyURI.getHost())) {
                 String encodedHost = encodeHost(origHost, remoteURI);
                 String destHost = encodedHost + "." + proxyURI.getHost();
-                // store orig host to query param if too long
-                Optional<String> origHostOpt =  encodedHost.startsWith("md5-") ? Optional.of(origHost) : Optional.empty();
-                url = UriComponentsBuilder.fromUriString(remoteUrl)
-                        .scheme(proxyURI.getScheme()).host(destHost).port(proxyURI.getPort())
-                        .queryParamIfPresent("h0st", origHostOpt)
-                        .build().toString();
+
+                String rawPath = remoteURI.getRawPath();
+                String rawQuery = remoteURI.getRawQuery();
+                if (encodedHost.startsWith("md5-")) {
+                    String h0stParam = "h0st=" + origHost;
+                    rawQuery = rawQuery == null ? h0stParam : rawQuery + "&" + h0stParam;
+                }
+
+                StringBuilder sb = new StringBuilder();
+                sb.append(proxyURI.getScheme()).append("://").append(destHost);
+                if (proxyURI.getPort() > 0) sb.append(':').append(proxyURI.getPort());
+                if (rawPath != null && !rawPath.isEmpty()) sb.append(rawPath);
+                if (rawQuery != null) sb.append('?').append(rawQuery);
+                url = sb.toString();
             }
         }
 
@@ -121,22 +121,21 @@ public final class UrlUtil {
 
     /** Extract the first value of {@code name} from a raw (already-decoded) query string. */
     private static String parseQueryParam(String rawQuery, String name) {
-    if (rawQuery == null) return null;
-    String prefix = name + "=";
-    for (String param : rawQuery.split("&")) {
-      if (param.startsWith(prefix)) {
-              return param.substring(prefix.length());
-          }
+        if (rawQuery == null) return null;
+        String prefix = name + "=";
+        for (String param : rawQuery.split("&")) {
+            if (param.startsWith(prefix)) {
+                return param.substring(prefix.length());
             }
+        }
         return null;
     }
-
 
     private static String encodeHost(String origHost, URI remoteURI) {
         String encoded = origHost.replace("-", "--").replace('.', '-')
                 + (remoteURI.getPort() > 0 ? "-" + remoteURI.getPort() : "");
         if (encoded.length() > 63) {
-            String md5 = DigestUtils.md5DigestAsHex(encoded.getBytes(StandardCharsets.UTF_8));
+            String md5 = md5Hex(encoded.getBytes(StandardCharsets.UTF_8));
             String md5Host = "md5-" + md5;
             hostCache.put(md5Host, encoded);
             return md5Host;
@@ -148,12 +147,21 @@ public final class UrlUtil {
         if (httpUrl.startsWith("//")) {
             httpUrl = "https:" + httpUrl;
         }
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(httpUrl);
         try {
-            return builder.build().toUri();
+            return URI.create(httpUrl);
+        } catch (IllegalArgumentException e) {
+            // fallback: strip query
+            int q = httpUrl.indexOf('?');
+            return URI.create(q >= 0 ? httpUrl.substring(0, q) : httpUrl);
+        }
+    }
+
+    private static String md5Hex(byte[] bytes) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            return HexFormat.of().formatHex(md.digest(bytes));
         } catch (Exception e) {
-            // fallback ignore query
-            return builder.query(null).build().toUri();
+            return "";
         }
     }
 }

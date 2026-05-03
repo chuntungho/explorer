@@ -7,15 +7,16 @@ import com.chuntung.explorer.util.UrlUtil;
 import io.micronaut.http.*;
 import io.micronaut.http.annotation.RequestFilter;
 import io.micronaut.http.annotation.ServerFilter;
-import io.micronaut.http.filter.FilterContinuation;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Objects;
 
 @Singleton
@@ -36,15 +37,45 @@ public class ExplorerFilter {
     }
 
     @RequestFilter
-    public Mono<MutableHttpResponse<?>> filter(
-            HttpRequest<?> request,
-            FilterContinuation<MutableHttpResponse<?>> continuation) {
+    public Mono<MutableHttpResponse<?>> filter(HttpRequest<?> request) {
 
         String hostHeader = request.getHeaders().get("Host");
-        if (!Objects.equals(explorerProperties.getHost(), hostHeader)) {
-            return Mono.from(continuation.proceed());
+
+        if (Objects.equals(explorerProperties.getHost(), hostHeader)) {
+            return handleExplorerHost(request);
         }
 
+        // Serve robots.txt for all proxy hosts to prevent crawling
+        if ("/robots.txt".equals(request.getPath())) {
+            return Mono.<MutableHttpResponse<?>>fromCallable(() -> assetManager.getAsset("/robots.txt"))
+                    .subscribeOn(Schedulers.boundedElastic());
+        }
+
+        // Subdomain-based proxy routing — build URI from Host header so host is always set
+        URI routingUri;
+        try {
+            String rawPath = request.getUri().getRawPath();
+            String rawQuery = request.getUri().getRawQuery();
+            routingUri = URI.create("http://" + hostHeader
+                    + (rawPath != null ? rawPath : "/")
+                    + (rawQuery != null ? "?" + rawQuery : ""));
+        } catch (IllegalArgumentException e) {
+            return Mono.just(HttpResponse.status(HttpStatus.BAD_REQUEST)
+                    .body(("Invalid host: " + hostHeader).getBytes(StandardCharsets.UTF_8)));
+        }
+
+        List<URI> uris = UrlUtil.splitUris(routingUri, explorerProperties.getHostMappings());
+        if (uris.isEmpty()) {
+            String errMsg = "Invalid host: " + hostHeader;
+            return Mono.just(HttpResponse.status(HttpStatus.BAD_REQUEST)
+                    .body(errMsg.getBytes(StandardCharsets.UTF_8)));
+        }
+
+        byte[] body = request.getBody(byte[].class).orElse(new byte[0]);
+        return proxyManager.proxy(request, body, uris.get(0), uris.get(1));
+    }
+
+    private Mono<MutableHttpResponse<?>> handleExplorerHost(HttpRequest<?> request) {
         String url = request.getParameters().getFirst("url").orElse(null);
         String direct = request.getParameters().getFirst("direct").orElse(null);
 
@@ -74,9 +105,8 @@ public class ExplorerFilter {
 
         // Serve static asset
         String path = request.getPath();
-        return Mono.fromCallable(() ->
-                assetManager.getAsset(Objects.equals("/", path) ? "/browser.html" : path)
-        ).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
-                .cast(MutableHttpResponse.class);
+        return Mono.<MutableHttpResponse<?>>fromCallable(() -> assetManager.getAsset(
+                        Objects.equals("/", path) ? "/browser.html" : path))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

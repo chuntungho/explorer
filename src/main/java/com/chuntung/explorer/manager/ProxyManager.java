@@ -12,9 +12,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import io.micronaut.core.io.buffer.ByteBuffer;
+
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -195,12 +196,22 @@ public class ProxyManager {
     }
 
     private static byte[] mergeChunks(List<HttpResponse<ByteBuffer<?>>> chunks) {
-        int total = chunks.stream()
-                .mapToInt(c -> c.getBody().map(ByteBuffer::remaining).orElse(0))
-                .sum();
-        ByteBuffer combined = ByteBuffer.allocate(total);
-        chunks.forEach(c -> c.getBody().ifPresent(buf -> combined.put(buf.duplicate())));
-        return combined.array();
+        List<byte[]> parts = new ArrayList<>();
+        int total = 0;
+        for (HttpResponse<ByteBuffer<?>> chunk : chunks) {
+            if (chunk.getBody().isPresent()) {
+                byte[] bytes = chunk.getBody().get().toByteArray();
+                parts.add(bytes);
+                total += bytes.length;
+            }
+        }
+        byte[] combined = new byte[total];
+        int offset = 0;
+        for (byte[] part : parts) {
+            System.arraycopy(part, 0, combined, offset, part.length);
+            offset += part.length;
+        }
+        return combined;
     }
 
     private static void copyHeaders(MutableHttpHeaders src, MutableHttpResponse<?> response) {
