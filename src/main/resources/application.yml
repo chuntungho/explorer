@@ -1,48 +1,37 @@
-spring:
-  profiles:
+micronaut:
+  application:
+    name: explorer
+  environments:
     active: ${APP_ENV:local}
-  servlet:
-    multipart:
-      enabled: true
-      max-file-size: 100MB
-      max-request-size: 256MB
-  threads:
-    virtual:
-      enabled: true
+  server:
+    netty:
+      max-request-buffer-size: 268435456   # 256MB for multipart
+      max-header-size: 131072              # 128KB
+  http:
+    client:
+      max-content-length: 10485760         # 10MB for HTML collection
+  router:
+    static-resources:
+      defaults:
+        enabled: false
 
-server:
-#  port: 2024
-  max-http-request-header-size: 128KB
-  tomcat: # use netty
-    # refer to ServerProperties
-    max-http-response-header-size: 128KB
-
-    # allow special chars
-    relaxedQueryChars: <,>,[,\,\,],^,`,{,|,}
-
-    # allow illegal headers
-    rejectIllegalHeader: false
-
-    # enable transparent proxy
-    remote-ip:
-      remote-ip-header: x-forwarded-for
-      protocol-header: x-forwarded-proto
+cors:
+  enabled: true
+  configurations:
+    all:
+      allowed-origins-regex: ".*"
+      exposed-headers:
+        - "*"
 
 explorer:
-  # the headers passed by reverse proxy
   proxy-headers: X-Real-IP,X-Forwarded-For,X-Forwarded-Proto
-
-  # the headers should not be sent to client
   excluded-headers: X-Frame-Options,Content-Security-Policy,Content-Security-Policy-Report-Only,Transfer-Encoding
-
   host-mappings:
     google: www.google.com
     baidu: www.baidu.com
-
   block-rules:
     - host-pattern: www\.google\.com
       block-paths: ["/gen_204"]
-
     - host-pattern: .*\.?baidu\.com
       block-paths: [".*\\.gif", "/ztbox"]
       block-contents:
@@ -51,4 +40,4 @@ explorer:
             <style>
             div:has(> .c-abstract) {display:none;}
             .newsTitleTop {display: none;}
-            </style>"
+            </style>
