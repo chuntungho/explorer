@@ -1,0 +1,21 @@
+[
+  {
+    "name": "org.jsoup.parser.Parser",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.jsoup.parser.HtmlTreeBuilder",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.brotli.dec.BrotliInputStream",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true
+  }
+]

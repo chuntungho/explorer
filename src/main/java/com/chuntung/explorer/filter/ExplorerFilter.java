@@ -71,8 +71,7 @@ public class ExplorerFilter {
                     .body(errMsg.getBytes(StandardCharsets.UTF_8)));
         }
 
-        byte[] body = request.getBody(byte[].class).orElse(new byte[0]);
-        return proxyManager.proxy(request, body, uris.get(0), uris.get(1));
+        return proxyManager.proxy(request, uris.get(0), uris.get(1));
     }
 
     private Mono<MutableHttpResponse<?>> handleExplorerHost(HttpRequest<?> request) {
@@ -81,17 +80,15 @@ public class ExplorerFilter {
 
         if (url != null && !url.isEmpty()) {
             try {
-                URI requestUri = request.getUri();
-                URI proxyURI = requestUri;
+                URI proxyURI = request.getUri();
                 String wh = explorerProperties.getWildcardHost();
                 if (wh != null && !wh.isEmpty()) {
-                    proxyURI = new URI(requestUri.getScheme() + "://" + wh);
+                    String scheme = explorerProperties.getUrl().split("://")[0];
+                    proxyURI = new URI(scheme + "://" + wh);
                 }
-                final URI finalProxyURI = proxyURI;
 
                 if ("true".equalsIgnoreCase(direct)) {
-                    byte[] body = request.getBody(byte[].class).orElse(new byte[0]);
-                    return proxyManager.proxy(request, body, UrlUtil.toURI(url), finalProxyURI);
+                    return proxyManager.proxy(request, UrlUtil.toURI(url), proxyURI);
                 } else {
                     URI proxyUrl = UrlUtil.toURI(UrlUtil.proxyUrl(url, proxyURI));
                     return Mono.just(HttpResponse.redirect(proxyUrl));

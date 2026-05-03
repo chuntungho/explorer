@@ -1,11 +1,8 @@
 micronaut:
   application:
     name: explorer
-  environments:
-    active: ${APP_ENV:local}
   server:
     netty:
-      max-request-buffer-size: 268435456   # 256MB for multipart
       max-header-size: 131072              # 128KB
   http:
     client:

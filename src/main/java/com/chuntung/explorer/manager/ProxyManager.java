@@ -8,6 +8,7 @@ import io.micronaut.reactor.http.client.ReactorStreamingHttpClient;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -40,18 +41,20 @@ public class ProxyManager {
 
     public Mono<MutableHttpResponse<?>> proxy(
             HttpRequest<?> incomingRequest,
-            byte[] requestBody,
             URI remoteURI,
             URI proxyURI) {
 
         MutableHttpHeaders requestHeaders = buildRequestHeaders(incomingRequest.getHeaders(), remoteURI, proxyURI);
 
-        MutableHttpRequest<byte[]> outRequest = HttpRequest
-                .create(incomingRequest.getMethod(), remoteURI.toString());
+        MutableHttpRequest<Object> outRequest = HttpRequest.create(incomingRequest.getMethod(), remoteURI.toString());
         requestHeaders.forEach((k, vals) -> vals.forEach(v -> outRequest.getHeaders().add(k, v)));
-        if (requestBody != null && requestBody.length > 0) {
-            outRequest.body(requestBody);
-        }
+        incomingRequest.getBody().ifPresent(b -> {
+            if (b instanceof byte[] bytes) {
+                if (bytes.length > 0) outRequest.body(bytes);
+            } else {
+                outRequest.body(b);
+            }
+        });
 
         if (!adBlocker.preHandle(remoteURI, outRequest)) {
             logger.debug("Blocked request: {}", remoteURI);
@@ -61,60 +64,63 @@ public class ProxyManager {
         Set<String> excludedHeaders = getExcludedHeaders(incomingRequest.getHeaders().getOrigin() != null);
 
         return Flux.from(httpClient.exchangeStream(outRequest))
-                .collectList()
-                .flatMap(chunks -> {
-                    if (chunks.isEmpty()) {
-                        return Mono.just(HttpResponse.noContent());
+                .switchOnFirst((signal, remainingFlux) -> {
+                    if (!signal.hasValue()) {
+                        return remainingFlux.then(Mono.just((MutableHttpResponse<?>) HttpResponse.noContent()));
                     }
 
-                    HttpResponse<ByteBuffer<?>> first = chunks.get(0);
+                    HttpResponse<ByteBuffer<?>> first = signal.get();
                     HttpStatus status = HttpStatus.valueOf(first.getStatus().getCode());
                     HttpHeaders remoteHeaders = first.getHeaders();
-
-                    // Build mutable response headers from remote, excluding blocked headers
                     MutableHttpHeaders responseHeaders = buildResponseHeaders(remoteHeaders, excludedHeaders, proxyURI);
 
-                    // Handle redirect
+                    // Extract bytes eagerly before Netty releases the underlying ByteBuf
+                    Flux<byte[]> chunkBytes = remainingFlux
+                            .map(r -> r.getBody().map(bb -> bb.toByteArray()).orElse(new byte[0]));
+
+                    // Redirect: rewrite Location and return buffered response
                     if (status.getCode() >= 300 && status.getCode() < 400) {
-                        String location = remoteHeaders.get("Location");
-                        if (location != null) {
-                            responseHeaders.set("Location", UrlUtil.proxyUrl(location, proxyURI));
-                        }
-                        byte[] body = mergeChunks(chunks);
-                        MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(body);
-                        copyHeaders(responseHeaders, response);
-                        return Mono.just(response);
+                        return chunkBytes.collectList().map(parts -> {
+                            String location = remoteHeaders.get("Location");
+                            if (location != null) {
+                                responseHeaders.set("Location", UrlUtil.proxyUrl(location, proxyURI));
+                            }
+                            MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(mergeBytes(parts));
+                            copyHeaders(responseHeaders, response);
+                            return (MutableHttpResponse<?>) response;
+                        });
                     }
 
-                    // Check if HTML
                     String contentType = remoteHeaders.get("Content-Type");
                     boolean isHtml = contentType != null
                             && contentType.contains("text/") && contentType.contains("html");
 
-                    byte[] body = mergeChunks(chunks);
-
                     if (isHtml) {
-                        ExplorerSetting setting = new ExplorerSetting(
-                                incomingRequest.getUri().getRawQuery());
-                        MutableHttpHeaders mutableResponseHeaders = responseHeaders;
-                        return Mono.fromCallable(() ->
-                                htmlResolver.resolve(body, mutableResponseHeaders, remoteURI, proxyURI, setting)
-                        ).subscribeOn(Schedulers.boundedElastic())
-                                .map(resolved -> {
-                                    MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(resolved);
-                                    copyHeaders(mutableResponseHeaders, response);
-                                    return (MutableHttpResponse<?>) response;
-                                });
+                        ExplorerSetting setting = new ExplorerSetting(incomingRequest.getUri().getRawQuery());
+                        return chunkBytes.collectList().flatMap(parts -> {
+                            byte[] body = mergeBytes(parts);
+                            return Mono.fromCallable(() ->
+                                    htmlResolver.resolve(body, responseHeaders, remoteURI, proxyURI, setting)
+                            ).subscribeOn(Schedulers.boundedElastic())
+                                    .map(resolved -> {
+                                        MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(resolved);
+                                        copyHeaders(responseHeaders, response);
+                                        return (MutableHttpResponse<?>) response;
+                                    });
+                        });
                     }
 
-                    MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(body);
+                    // Non-HTML: stream extracted bytes directly without buffering
+                    Flux<byte[]> bodyStream = chunkBytes.filter(b -> b.length > 0);
+                    MutableHttpResponse<Publisher<byte[]>> response = HttpResponse.status(status, "").body(bodyStream);
                     copyHeaders(responseHeaders, response);
-                    return Mono.just(response);
+                    return Mono.just((MutableHttpResponse<?>) response);
                 })
+                .next()
                 .onErrorResume(e -> {
                     Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    if (cause instanceof UnknownHostException) {
-                        logger.debug("DNS resolution failed for: {}", remoteURI);
+                    if (isConnectivityError(cause)) {
+                        logger.debug("Connection failed for: {} ({})", remoteURI, cause.getClass().getSimpleName());
                     } else {
                         logger.warn("Failed to handle request: {}", remoteURI, e);
                     }
@@ -195,16 +201,9 @@ public class ProxyManager {
         return excluded;
     }
 
-    private static byte[] mergeChunks(List<HttpResponse<ByteBuffer<?>>> chunks) {
-        List<byte[]> parts = new ArrayList<>();
+    private static byte[] mergeBytes(List<byte[]> parts) {
         int total = 0;
-        for (HttpResponse<ByteBuffer<?>> chunk : chunks) {
-            if (chunk.getBody().isPresent()) {
-                byte[] bytes = chunk.getBody().get().toByteArray();
-                parts.add(bytes);
-                total += bytes.length;
-            }
-        }
+        for (byte[] part : parts) total += part.length;
         byte[] combined = new byte[total];
         int offset = 0;
         for (byte[] part : parts) {
@@ -212,6 +211,16 @@ public class ProxyManager {
             offset += part.length;
         }
         return combined;
+    }
+
+    private static boolean isConnectivityError(Throwable cause) {
+        if (cause instanceof UnknownHostException
+                || cause instanceof java.net.ConnectException
+                || cause instanceof java.nio.channels.ClosedChannelException) {
+            return true;
+        }
+        String name = cause.getClass().getName();
+        return name.contains("SslHandshakeException") || name.contains("ProxyConnectException");
     }
 
     private static void copyHeaders(MutableHttpHeaders src, MutableHttpResponse<?> response) {
