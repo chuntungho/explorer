@@ -61,3 +61,11 @@ graalvmNative {
         }
     }
 }
+
+def dockerRegistry = System.getenv("DOCKER_REGISTRY") ?: ""
+def imageBase = dockerRegistry ? "$dockerRegistry/chuntung/explorer" : "chuntung/explorer"
+def imageSha = (System.getenv("GITHUB_SHA") ?: "local").take(7)
+
+dockerBuildNative {
+    images = ["${imageBase}:sha-${imageSha}", "${imageBase}:micronaut"]
+}
