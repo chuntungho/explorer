@@ -4,7 +4,7 @@ logging:
 
 explorer:
   proxy:
-    enabled: true
+    enabled: false
     type: SOCKS
     host: localhost
     port: 7897

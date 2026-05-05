@@ -6,11 +6,13 @@ import io.micronaut.http.*;
 import io.micronaut.http.simple.SimpleHttpHeaders;
 import io.micronaut.reactor.http.client.ReactorStreamingHttpClient;
 import jakarta.inject.Singleton;
+import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.reactivestreams.Publisher;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 import io.micronaut.core.io.buffer.ByteBuffer;
@@ -63,71 +65,91 @@ public class ProxyManager {
 
         Set<String> excludedHeaders = getExcludedHeaders(incomingRequest.getHeaders().getOrigin() != null);
 
-        return Flux.from(httpClient.exchangeStream(outRequest))
-                .switchOnFirst((signal, remainingFlux) -> {
-                    if (!signal.hasValue()) {
-                        return remainingFlux.then(Mono.just((MutableHttpResponse<?>) HttpResponse.noContent()));
-                    }
+        // Mono.create + Sinks decouples the response emission from the body stream lifetime.
+        // switchOnFirst + next() would cancel the upstream before Micronaut subscribes to the
+        // body Publisher, so instead we drive the exchange subscription manually and emit the
+        // response via the MonoSink; for non-HTML, the body is piped through a Sinks.Many so
+        // it outlives the switchOnFirst chain.
+        return Mono.create(emitter -> {
+            Disposable sub = Flux.from(httpClient.exchangeStream(outRequest))
+                    .<Object>switchOnFirst((signal, remainingFlux) -> {
+                        if (!signal.hasValue()) {
+                            emitter.success(HttpResponse.noContent());
+                            return remainingFlux.thenMany(Flux.empty());
+                        }
 
-                    HttpResponse<ByteBuffer<?>> first = signal.get();
-                    HttpStatus status = HttpStatus.valueOf(first.getStatus().getCode());
-                    HttpHeaders remoteHeaders = first.getHeaders();
-                    MutableHttpHeaders responseHeaders = buildResponseHeaders(remoteHeaders, excludedHeaders, proxyURI);
+                        HttpResponse<ByteBuffer<?>> first = signal.get();
+                        HttpStatus status = HttpStatus.valueOf(first.getStatus().getCode());
+                        HttpHeaders remoteHeaders = first.getHeaders();
+                        MutableHttpHeaders responseHeaders = buildResponseHeaders(remoteHeaders, excludedHeaders, proxyURI);
 
-                    // Extract bytes eagerly before Netty releases the underlying ByteBuf
-                    Flux<byte[]> chunkBytes = remainingFlux
-                            .map(r -> r.getBody().map(bb -> bb.toByteArray()).orElse(new byte[0]));
+                        Flux<byte[]> chunkBytes = remainingFlux
+                                .map(r -> r.getBody().map(bb -> bb.toByteArray()).orElse(new byte[0]));
 
-                    // Redirect: rewrite Location and return buffered response
-                    if (status.getCode() >= 300 && status.getCode() < 400) {
-                        return chunkBytes.collectList().map(parts -> {
-                            String location = remoteHeaders.get("Location");
-                            if (location != null) {
-                                responseHeaders.set("Location", UrlUtil.proxyUrl(location, proxyURI));
-                            }
-                            MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(mergeBytes(parts));
-                            copyHeaders(responseHeaders, response);
-                            return (MutableHttpResponse<?>) response;
-                        });
-                    }
+                        if (status.getCode() >= 300 && status.getCode() < 400) {
+                            return chunkBytes.collectList()
+                                    .doOnNext(parts -> {
+                                        String location = remoteHeaders.get("Location");
+                                        if (location != null)
+                                            responseHeaders.set("Location", UrlUtil.proxyUrl(location, proxyURI));
+                                        MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(mergeBytes(parts));
+                                        copyHeaders(responseHeaders, response);
+                                        emitter.success(response);
+                                    })
+                                    .then();
+                        }
 
-                    String contentType = remoteHeaders.get("Content-Type");
-                    boolean isHtml = contentType != null
-                            && contentType.contains("text/") && contentType.contains("html");
+                        String contentType = remoteHeaders.get("Content-Type");
+                        boolean isHtml = contentType != null
+                                && contentType.contains("text/") && contentType.contains("html");
 
-                    if (isHtml) {
-                        ExplorerSetting setting = new ExplorerSetting(incomingRequest.getUri().getRawQuery());
-                        return chunkBytes.collectList().flatMap(parts -> {
-                            byte[] body = mergeBytes(parts);
-                            return Mono.fromCallable(() ->
-                                    htmlResolver.resolve(body, responseHeaders, remoteURI, proxyURI, setting)
-                            ).subscribeOn(Schedulers.boundedElastic())
-                                    .map(resolved -> {
+                        if (isHtml) {
+                            ExplorerSetting setting = new ExplorerSetting(incomingRequest.getUri().getRawQuery());
+                            return chunkBytes.collectList()
+                                    .flatMap(parts -> Mono.fromCallable(() ->
+                                            htmlResolver.resolve(mergeBytes(parts), responseHeaders, remoteURI, proxyURI, setting))
+                                            .subscribeOn(Schedulers.boundedElastic()))
+                                    .doOnNext(resolved -> {
                                         MutableHttpResponse<byte[]> response = HttpResponse.status(status, "").body(resolved);
                                         copyHeaders(responseHeaders, response);
-                                        return (MutableHttpResponse<?>) response;
-                                    });
-                        });
-                    }
+                                        emitter.success(response);
+                                    })
+                                    .then();
+                        }
 
-                    // Non-HTML: stream extracted bytes directly without buffering
-                    Flux<byte[]> bodyStream = chunkBytes.filter(b -> b.length > 0);
-                    MutableHttpResponse<Publisher<byte[]>> response = HttpResponse.status(status, "").body(bodyStream);
-                    copyHeaders(responseHeaders, response);
-                    return Mono.just((MutableHttpResponse<?>) response);
-                })
-                .next()
-                .onErrorResume(e -> {
-                    Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    if (isConnectivityError(cause)) {
-                        logger.debug("Connection failed for: {} ({})", remoteURI, cause.getClass().getSimpleName());
-                    } else {
-                        logger.warn("Failed to handle request: {}", remoteURI, e);
-                    }
-                    byte[] msg = (e.getMessage() != null ? e.getMessage() : "Bad Gateway")
-                            .getBytes(StandardCharsets.UTF_8);
-                    return Mono.just(HttpResponse.status(HttpStatus.BAD_GATEWAY, "").body(msg));
-                });
+                        // Non-HTML: emit response immediately with a Sinks.Many as the body.
+                        // The sink is fed by the remainder of the exchange stream, which stays
+                        // alive because we drive it through our own subscribe() below.
+                        Sinks.Many<byte[]> bodySink = Sinks.many().unicast().onBackpressureBuffer();
+                        MutableHttpResponse<Publisher<byte[]>> response =
+                                HttpResponse.status(status, "").body(bodySink.asFlux());
+                        copyHeaders(responseHeaders, response);
+                        emitter.success(response);
+
+                        return chunkBytes
+                                .filter(b -> b.length > 0)
+                                .doOnNext(bytes -> bodySink.tryEmitNext(bytes))
+                                .doOnComplete(() -> bodySink.tryEmitComplete())
+                                .doOnError(e -> bodySink.tryEmitError(e))
+                                .then();
+                    })
+                    .subscribe(
+                            __ -> {},
+                            error -> {
+                                Throwable cause = error.getCause() != null ? error.getCause() : error;
+                                if (isConnectivityError(cause)) {
+                                    logger.debug("Connection failed for: {} ({})", remoteURI, cause.getClass().getSimpleName());
+                                } else {
+                                    logger.warn("Failed to handle request: {}", remoteURI, error);
+                                }
+                                byte[] msg = (error.getMessage() != null ? error.getMessage() : "Bad Gateway")
+                                        .getBytes(StandardCharsets.UTF_8);
+                                emitter.success(HttpResponse.status(HttpStatus.BAD_GATEWAY, "").body(msg));
+                            }
+                    );
+
+            emitter.onCancel(sub::dispose);
+        });
     }
 
     private MutableHttpHeaders buildRequestHeaders(HttpHeaders source, URI remoteURI, URI proxyURI) {
@@ -220,7 +242,7 @@ public class ProxyManager {
             return true;
         }
         String name = cause.getClass().getName();
-        return name.contains("SslHandshakeException") || name.contains("ProxyConnectException");
+        return name.contains("SslHandshake") || name.contains("ProxyConnectException");
     }
 
     private static void copyHeaders(MutableHttpHeaders src, MutableHttpResponse<?> response) {
