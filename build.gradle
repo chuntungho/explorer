@@ -33,6 +33,11 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
 
+
+application {
+    mainClass = "com.chuntung.explorer.MainApplication"
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
