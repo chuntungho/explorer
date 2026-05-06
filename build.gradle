@@ -1,7 +1,7 @@
 plugins {
     id 'idea'
     id 'java'
-    id 'io.micronaut.application' version '4.4.4'
+    id 'io.micronaut.application' version '4.6.2'
 }
 
 version = '1.0-SNAPSHOT'
@@ -42,7 +42,7 @@ java {
 [compileJava, compileTestJava, javadoc]*.options*.encoding = 'UTF-8'
 
 micronaut {
-    version = "4.4.3"
+    version = "4.10.13"
     runtime("netty")
     testRuntime("junit5")
     processing {
@@ -57,7 +57,7 @@ graalvmNative {
             imageName = 'explorer'
             buildArgs.add('-H:+AddAllCharsets')
             buildArgs.add('--initialize-at-build-time=org.jsoup')
-            buildArgs.add('--exclude-resources=application-local\\.yml')
+           // buildArgs.add('--exclude-resources=application-local\\.yml')
         }
     }
 }
