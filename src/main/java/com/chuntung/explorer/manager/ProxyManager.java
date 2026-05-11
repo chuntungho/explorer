@@ -45,6 +45,8 @@ public class ProxyManager {
      * All other responses are piped as a {@code Flux<DataBuffer>} — no intermediate buffering.
      */
     public Mono<Void> proxy(ServerHttpResponse serverResponse, RequestEntity<?> request, URI remoteURI, URI proxyURI) {
+        logger.info("Proxying remote uri: {}", remoteURI);
+        
         HttpHeaders requestHeaders = copyAndTrimHeaders(request.getHeaders(), explorerProperties.getProxyHeaders(), proxyURI);
 
         // replace host with remote host
