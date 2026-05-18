@@ -1,7 +1,4 @@
-<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-    <g>
-        <title>Layer 1</title>
-        <path d="m64.49996,122.99991a58.49996,58.24996 0 1 1 0,-116.49992a58.49996,58.24996 0 0 1 0,116.49992m-51.18746,-58.24996a51.18746,50.96871 0 0 0 51.18746,50.96871a25.59373,25.48436 0 1 0 0,-50.96871a25.59373,25.48436 0 1 1 0,-50.96871a51.18746,50.96871 0 0 0 -51.18746,50.96871" id="svg_1" fill="#7f007f"  stroke="null"/>
-    </g>
-
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 64 64" fill="none">
+  <path d="M 50.13 23.55 A 20 20 0 1 1 40.45 13.87" stroke="#DC4F2C" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="46" cy="18" r="7" fill="#DC4F2C"/>
 </svg>
