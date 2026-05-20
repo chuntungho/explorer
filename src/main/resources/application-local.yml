@@ -33,7 +33,7 @@ explorer:
       block-contents:
         - selector: "head"
           prepend: | 
-            <script>if(window===window.top){window.location.href='https://x.chuntung.com';}</script>
+            <script>if(window===window.top){window.location.href='http://localhost:8080';}</script>
 
     - host-pattern: www\.google\.com
       block-paths: ["/gen_204"]

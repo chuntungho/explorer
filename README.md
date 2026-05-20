@@ -4,7 +4,7 @@ Explore the world wide web customized to your wish.
 
 ## Online Demo
 
-[https://x.chuntung.com](https://x.chuntung.com)
+[https://explorer.qzz.io](https://explorer.qzz.io/)
 
 ### Use as a docker mirror
 
@@ -12,13 +12,13 @@ vi `/etc/docker/daemon.json`
 
 ```yaml
 {
-   "registry-mirrors": ["https://docker.x.chuntung.com"]
+   "registry-mirrors": ["https://docker.explorer.qzz.io"]
  }
 ```
 
 Login mirror using Docker Hub [Personal access tokens](https://docs.docker.com/security/access-tokens/)
 
-`docker login docker.x.chuntung.com -u <your-account>`
+`docker login docker.explorer.qzz.io -u <your-account>`
 
 ## Local Debug
 
